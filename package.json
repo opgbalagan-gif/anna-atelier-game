@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "vinext dev",
     "build": "vinext build",
+    "postbuild": "node scripts/clean-server-assets.mjs",
     "build:pages": "vite build --config vite.pages.config.ts",
     "start": "vinext start",
     "test": "vinext build && node --test tests/rendered-html.test.mjs",
