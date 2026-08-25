@@ -23,7 +23,7 @@ test("renders the Anna Atelier game", async () => {
   assert.match(html, /<title>Ателье Анны — уютная игра<\/title>/i);
   assert.match(html, /Ателье Анны/);
   assert.match(html, /Главный экран ателье/);
-  assert.match(html, /Принять заказ/);
+  assert.match(html, /Открыть заказ/);
   assert.match(html, /Заказы/);
   assert.match(html, /Скука/);
   assert.doesNotMatch(html, /codex-preview|SkeletonPreview|Your site is taking shape/i);
@@ -52,6 +52,21 @@ test("keeps every activity inside one studio window", async () => {
   assert.match(game, /aria-label="Игра три в ряд"/);
   assert.match(game, /aria-label="Игра с рисунками"/);
   assert.doesNotMatch(game, /className="screen-topline"/);
+});
+
+test("shows incoming orders in Anna's upper-right bubble", async () => {
+  const game = await readFile(new URL("../app/Game.tsx", import.meta.url), "utf8");
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  assert.match(game, /\[showOrderModal, setShowOrderModal\] = useState\(false\)/);
+  assert.match(game, /className="mood-bubble order-alert-bubble"/);
+  assert.match(game, /aria-expanded=\{showOrderModal\}/);
+  assert.match(game, /className="order-modal order-inbox-card"/);
+  assert.match(game, /aria-modal="false"/);
+  assert.match(css, /\.mood-bubble\s*\{[^}]*top: 22px;[^}]*right: 22px;/);
+  assert.match(css, /\.order-alert-bubble\s*\{[^}]*cursor: pointer/);
+  assert.match(css, /\.order-inbox-card\s*\{[^}]*position: absolute;[^}]*top: 76px;[^}]*right: 18px;/);
+  assert.doesNotMatch(game, /order-modal-backdrop/);
+  assert.match(css, /@keyframes order-arrive/);
 });
 
 test("shows the active match-three task below the board", async () => {
