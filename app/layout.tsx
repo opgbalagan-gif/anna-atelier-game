@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://atelier-anny.sites.openai.com"),
+  metadataBase: new URL("https://atelier-anny.opgbalagan.chatgpt.site"),
   title: "Ателье Анны",
   description: "Уютная игра про швею, заботу и выполнение заказов.",
   openGraph: {

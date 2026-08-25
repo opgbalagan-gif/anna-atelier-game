@@ -4,6 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 
 const BOARD_SIZE = 7;
 const STARTING_MOVES = 24;
+const STATE_IMAGES = [
+  "/assets/states/anna-sewing-day.png",
+  "/assets/states/anna-bored-day.png",
+  "/assets/states/anna-hungry-day.png",
+  "/assets/states/anna-tired-day.png",
+  "/assets/states/anna-celebrates-day.png",
+];
 
 const TILE_TYPES = [
   { id: 0, name: "катушка ниток", short: "Нитки" },
@@ -187,19 +194,37 @@ export default function Game() {
   const averageCare = Math.round((hunger + energy + (100 - boredom)) / 3);
 
   const annaState = useMemo(() => {
+    if (orderReady) return "Анна закончила заказ и ждёт клиента";
+    if (energy <= 45) return "Анна устала — устройте небольшой отдых";
+    if (hunger <= 45) return "Анна проголодалась — пора перекусить";
     if (boredom >= 68) return "Анна заскучала — пора сшить что-нибудь";
     if (boredom >= 45) return "Анна ждёт новый творческий заказ";
     if (averageCare >= 75) return "Анна полна вдохновения";
     if (averageCare >= 48) return "Анне не помешает забота";
     return "Анна устала — устройте перерыв";
-  }, [averageCare, boredom]);
+  }, [averageCare, boredom, energy, hunger, orderReady]);
+
+  const annaVisual = useMemo(() => {
+    if (orderReady) return { id: "celebrates", src: "/assets/states/anna-celebrates-day.png", status: "Заказ готов", icon: "✦", alt: "Анна радуется готовому заказу" };
+    if (energy <= 45) return { id: "tired", src: "/assets/states/anna-tired-day.png", status: "Устала", icon: "z", alt: "Уставшая Анна прикрывает зевок" };
+    if (hunger <= 45) return { id: "hungry", src: "/assets/states/anna-hungry-day.png", status: "Проголодалась", icon: "⌁", alt: "Проголодавшаяся Анна сделала перерыв" };
+    if (boredom >= 55) return { id: "bored", src: "/assets/states/anna-bored-day.png", status: "Скучает", icon: "…", alt: "Анна скучает у швейной машинки" };
+    return { id: "sewing", src: "/assets/states/anna-sewing-day.png", status: "Шьёт заказ", icon: "♡", alt: "Анна шьёт заказ в дневном ателье" };
+  }, [boredom, energy, hunger, orderReady]);
+
+  useEffect(() => {
+    STATE_IMAGES.forEach((src) => {
+      const image = new Image();
+      image.src = src;
+    });
+  }, []);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      setHunger((value) => Math.max(24, value - 1));
-      setEnergy((value) => Math.max(20, value - 0.7));
-      setBoredom((value) => Math.min(100, value + 1.2));
-    }, 18000);
+      setHunger((value) => Math.max(24, value - 1.5));
+      setEnergy((value) => Math.max(20, value - 1));
+      setBoredom((value) => Math.min(100, value + 2));
+    }, 15000);
     return () => window.clearInterval(timer);
   }, []);
 
@@ -355,10 +380,10 @@ export default function Game() {
       <section className="workspace-grid">
         <aside className="anna-card panel">
           <div className="character-stage">
-            <img src="/assets/anna-atelier-scene.png" alt="Мультяшная швея Анна работает за машинкой в уютном ателье" />
+            <img key={annaVisual.src} className="scene-image" src={annaVisual.src} alt={annaVisual.alt} />
             <div className="stage-glow" />
-            <div className="status-pill"><span aria-hidden="true">✂</span><strong>{boredom >= 68 ? "Скучает" : "Шьёт заказ"}</strong></div>
-            <span className={`mood-bubble${boredom >= 68 ? " boredom-alert" : ""}`} aria-label={`Скука Анны: ${Math.round(boredom)}%`}>{boredom >= 68 ? "…" : "♡"}</span>
+            <div className="status-pill"><span aria-hidden="true">{annaVisual.id === "sewing" ? "✂" : annaVisual.icon}</span><strong>{annaVisual.status}</strong></div>
+            <span className={`mood-bubble${annaVisual.id !== "sewing" ? " boredom-alert" : ""}`} aria-label={`Состояние Анны: ${annaVisual.status}`}>{annaVisual.icon}</span>
           </div>
           <div className="anna-copy">
             <div className="section-heading compact-heading">
@@ -400,7 +425,7 @@ export default function Game() {
           <div className={`match-board${busy ? " board-busy" : ""}`} role="grid" aria-label="Игровое поле 7 на 7">
             {board.map((type, index) => (
               <button
-                className={`tile${selected === index ? " tile-selected" : ""}${matched.has(index) ? " tile-matched" : ""}`}
+                className={`tile tile-type-${type}${selected === index ? " tile-selected" : ""}${matched.has(index) ? " tile-matched" : ""}`}
                 key={index}
                 type="button"
                 role="gridcell"
