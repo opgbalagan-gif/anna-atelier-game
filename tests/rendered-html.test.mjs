@@ -72,10 +72,13 @@ test("supports swipe controls on the match-three board", async () => {
 });
 
 test("moves the mobile match-three board closer to the top", async () => {
+  const game = await readFile(new URL("../app/Game.tsx", import.meta.url), "utf8");
   const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
-  assert.match(css, /\.game-shell:has\(#match-board\) \.topbar\s*\{\s*display: none/);
-  assert.match(css, /\.game-shell:has\(#match-board\) \.screen-topline\s*\{[^}]*flex-direction: row/);
-  assert.match(css, /\.game-shell:has\(#match-board\) \.board-panel\s*\{\s*padding-top: 15px/);
+  assert.match(game, /screen === "match3" \? "topbar topbar-match-hidden"/);
+  assert.match(css, /\.topbar\.topbar-match-hidden\s*\{\s*display: none/);
+  assert.match(css, /\.topbar-match-hidden ~ \.screen-enter \.screen-topline\s*\{[^}]*flex-direction: row/);
+  assert.match(css, /\.topbar-match-hidden ~ \.screen-enter \.board-panel\s*\{\s*padding-top: 15px/);
+  assert.doesNotMatch(css, /:has\(#match-board\)/);
 });
 
 test("unlocks drawing when Anna is bored", async () => {
