@@ -5,12 +5,23 @@ import { useEffect, useMemo, useState } from "react";
 const BOARD_SIZE = 7;
 const STARTING_MOVES = 24;
 const STATE_IMAGES = [
-  "/assets/states/anna-sewing-day.png",
-  "/assets/states/anna-bored-day.png",
-  "/assets/states/anna-hungry-day.png",
-  "/assets/states/anna-tired-day.png",
-  "/assets/states/anna-celebrates-day.png",
+  "assets/states/anna-sewing-day.png",
+  "assets/states/anna-bored-day.png",
+  "assets/states/anna-hungry-day.png",
+  "assets/states/anna-tired-day.png",
+  "assets/states/anna-celebrates-day.png",
+  "assets/states/anna-eating-day.png",
 ];
+
+function assetPath(path: string) {
+  const html =
+    typeof globalThis.document === "undefined"
+      ? undefined
+      : globalThis.document.documentElement;
+  const prefix = html?.dataset.assetPrefix || "/";
+
+  return `${prefix.replace(/\/?$/, "/")}${path.replace(/^\//, "")}`;
+}
 
 const TILE_TYPES = [
   { id: 0, name: "катушка ниток", short: "Нитки" },
@@ -154,6 +165,7 @@ function TileSprite({ type, small = false }: { type: number; small?: boolean }) 
   return (
     <span
       className={`tile-sprite tile-sprite-${type}${small ? " tile-sprite-small" : ""}`}
+      style={{ backgroundImage: `url("${assetPath("assets/sewing-tiles.png")}")` }}
       aria-hidden="true"
     />
   );
@@ -187,6 +199,7 @@ export default function Game() {
   const [hunger, setHunger] = useState(76);
   const [energy, setEnergy] = useState(83);
   const [boredom, setBoredom] = useState(28);
+  const [temporaryState, setTemporaryState] = useState<"eating" | null>(null);
   const [toast, setToast] = useState("Соберите материалы для заказа");
 
   const order = ORDERS[orderIndex % ORDERS.length];
@@ -194,6 +207,7 @@ export default function Game() {
   const averageCare = Math.round((hunger + energy + (100 - boredom)) / 3);
 
   const annaState = useMemo(() => {
+    if (temporaryState === "eating") return "Анна устроила уютный перекус";
     if (orderReady) return "Анна закончила заказ и ждёт клиента";
     if (energy <= 45) return "Анна устала — устройте небольшой отдых";
     if (hunger <= 45) return "Анна проголодалась — пора перекусить";
@@ -202,20 +216,21 @@ export default function Game() {
     if (averageCare >= 75) return "Анна полна вдохновения";
     if (averageCare >= 48) return "Анне не помешает забота";
     return "Анна устала — устройте перерыв";
-  }, [averageCare, boredom, energy, hunger, orderReady]);
+  }, [averageCare, boredom, energy, hunger, orderReady, temporaryState]);
 
   const annaVisual = useMemo(() => {
-    if (orderReady) return { id: "celebrates", src: "/assets/states/anna-celebrates-day.png", status: "Заказ готов", icon: "✦", alt: "Анна радуется готовому заказу" };
-    if (energy <= 45) return { id: "tired", src: "/assets/states/anna-tired-day.png", status: "Устала", icon: "z", alt: "Уставшая Анна прикрывает зевок" };
-    if (hunger <= 45) return { id: "hungry", src: "/assets/states/anna-hungry-day.png", status: "Проголодалась", icon: "⌁", alt: "Проголодавшаяся Анна сделала перерыв" };
-    if (boredom >= 55) return { id: "bored", src: "/assets/states/anna-bored-day.png", status: "Скучает", icon: "…", alt: "Анна скучает у швейной машинки" };
-    return { id: "sewing", src: "/assets/states/anna-sewing-day.png", status: "Шьёт заказ", icon: "♡", alt: "Анна шьёт заказ в дневном ателье" };
-  }, [boredom, energy, hunger, orderReady]);
+    if (temporaryState === "eating") return { id: "eating", video: assetPath("assets/videos/anna-eating.mp4"), poster: assetPath("assets/states/anna-eating-day.png"), status: "Перекусывает", icon: "☕", alt: "Анна ест круассан и пьёт чай" };
+    if (orderReady) return { id: "celebrates", video: assetPath("assets/videos/anna-celebrates.mp4"), poster: assetPath("assets/states/anna-celebrates-day.png"), status: "Заказ готов", icon: "✦", alt: "Анна радуется готовому заказу" };
+    if (energy <= 45) return { id: "tired", video: assetPath("assets/videos/anna-tired.mp4"), poster: assetPath("assets/states/anna-tired-day.png"), status: "Устала", icon: "z", alt: "Уставшая Анна прикрывает зевок" };
+    if (hunger <= 45) return { id: "hungry", video: assetPath("assets/videos/anna-hungry.mp4"), poster: assetPath("assets/states/anna-hungry-day.png"), status: "Проголодалась", icon: "⌁", alt: "Проголодавшаяся Анна сделала перерыв" };
+    if (boredom >= 55) return { id: "bored", video: assetPath("assets/videos/anna-bored.mp4"), poster: assetPath("assets/states/anna-bored-day.png"), status: "Грустит", icon: "…", alt: "Анна грустит у швейной машинки" };
+    return { id: "sewing", video: assetPath("assets/videos/anna-sewing.mp4"), poster: assetPath("assets/states/anna-sewing-day.png"), status: "Шьёт заказ", icon: "♡", alt: "Анна шьёт заказ в дневном ателье" };
+  }, [boredom, energy, hunger, orderReady, temporaryState]);
 
   useEffect(() => {
     STATE_IMAGES.forEach((src) => {
       const image = new Image();
-      image.src = src;
+      image.src = assetPath(src);
     });
   }, []);
 
@@ -332,7 +347,11 @@ export default function Game() {
       return;
     }
     setCoins((value) => value - cost);
-    if (kind === "food") setHunger((value) => Math.min(100, value + 22));
+    if (kind === "food") {
+      setHunger((value) => Math.min(100, value + 22));
+      setTemporaryState("eating");
+      window.setTimeout(() => setTemporaryState(null), 4200);
+    }
     if (kind === "rest") setEnergy((value) => Math.min(100, value + 20));
     setToast(kind === "food" ? "Чай и круассан готовы" : "Небольшая передышка");
   }
@@ -380,7 +399,19 @@ export default function Game() {
       <section className="workspace-grid">
         <aside className="anna-card panel">
           <div className="character-stage">
-            <img key={annaVisual.src} className="scene-image" src={annaVisual.src} alt={annaVisual.alt} />
+            <video
+              key={annaVisual.video}
+              className="scene-image"
+              autoPlay
+              loop
+              muted
+              playsInline
+              preload="auto"
+              poster={annaVisual.poster}
+              aria-label={annaVisual.alt}
+            >
+              <source src={annaVisual.video} type="video/mp4" />
+            </video>
             <div className="stage-glow" />
             <div className="status-pill"><span aria-hidden="true">{annaVisual.id === "sewing" ? "✂" : annaVisual.icon}</span><strong>{annaVisual.status}</strong></div>
             <span className={`mood-bubble${annaVisual.id !== "sewing" ? " boredom-alert" : ""}`} aria-label={`Состояние Анны: ${annaVisual.status}`}>{annaVisual.icon}</span>
