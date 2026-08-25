@@ -44,6 +44,12 @@ test("connects the complete order flow", async () => {
   assert.match(game, /setCelebrating\(true\)[\s\S]*setScreen\("home"\)/);
 });
 
+test("switches Anna states without static pictures", async () => {
+  const game = await readFile(new URL("../app/Game.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(game, /poster=|STATE_IMAGES|assets\/states\//);
+  assert.match(game, /<video[^>]+autoPlay[^>]+preload="auto"/);
+});
+
 test("unlocks drawing when Anna is bored", async () => {
   const game = await readFile(new URL("../app/Game.tsx", import.meta.url), "utf8");
   assert.match(game, /DRAWING_UNLOCK_AT = 100/);
