@@ -22,16 +22,28 @@ test("renders the Anna Atelier game", async () => {
   const html = await response.text();
   assert.match(html, /<title>Ателье Анны — уютная игра<\/title>/i);
   assert.match(html, /Ателье Анны/);
-  assert.match(html, /Соберите материалы/);
+  assert.match(html, /Главный экран ателье/);
+  assert.match(html, /Принять заказ/);
+  assert.match(html, /Заказы/);
   assert.match(html, /Скука/);
   assert.doesNotMatch(html, /codex-preview|SkeletonPreview|Your site is taking shape/i);
 });
 
-test("connects boredom with sewing gameplay", async () => {
+test("connects the complete order flow", async () => {
   const game = await readFile(new URL("../app/Game.tsx", import.meta.url), "utf8");
-  assert.match(game, /const \[boredom, setBoredom\]/);
-  assert.match(game, /setBoredom\(\(value\) => Math\.max\(0/);
+  assert.match(game, /type Screen = "home" \| "match3" \| "orders" \| "drawing"/);
+  assert.match(game, /Принять заказ/);
+  assert.match(game, /setScreen\("match3"\)/);
   assert.match(game, /id="match-board"/);
-  assert.match(game, /Шить/);
+  assert.match(game, /Заказ готов/);
+  assert.match(game, /setCelebrating\(true\)/);
+});
+
+test("unlocks drawing when Anna is bored", async () => {
+  const game = await readFile(new URL("../app/Game.tsx", import.meta.url), "utf8");
+  assert.match(game, /DRAWING_UNLOCK_AT = 80/);
+  assert.match(game, /drawingUnlocked/);
+  assert.match(game, /Нарисуйте узор/);
+  assert.match(game, /setBoredom\(5\)/);
   assert.doesNotMatch(game, /болез|illness|sick/i);
 });
