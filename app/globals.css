@@ -1197,6 +1197,9 @@ h1 {
 .order-modal h2 { margin: 7px 0 18px; color: #4e3835; font: 600 34px/1.05 Georgia, serif; }
 .modal-close { position: absolute; top: 13px; right: 15px; width: 34px; height: 34px; border: 0; border-radius: 50%; color: var(--rose-dark); background: rgba(183, 95, 101, 0.1); font-size: 23px; cursor: pointer; }
 .letter-stamp { position: absolute; top: 45px; right: 46px; display: grid; width: 54px; height: 64px; place-items: center; border: 3px dotted rgba(183, 95, 101, 0.34); color: var(--rose); font-size: 24px; transform: rotate(5deg); }
+.delivery-modal { border-color: rgba(67, 122, 110, 0.34); }
+.delivery-ribbon { position: absolute; top: 42px; right: 44px; display: grid; width: 58px; height: 58px; place-items: center; border: 5px double rgba(255, 255, 255, 0.72); border-radius: 50%; color: #fffaf0; background: var(--teal); box-shadow: 0 8px 22px rgba(67, 122, 110, 0.24); font: 700 25px Georgia, serif; transform: rotate(5deg); }
+.delivery-modal .order-letter { color: #557069; }
 .modal-client { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
 .modal-client > span { display: grid; width: 40px; height: 40px; place-items: center; border-radius: 50%; color: #fff; background: var(--teal); font: italic 700 18px Georgia, serif; }
 .modal-client small, .modal-client strong { display: block; }
@@ -1432,6 +1435,7 @@ h1 {
   .order-modal { padding: 36px 22px 24px; }
   .order-modal h2 { max-width: 75%; font-size: 28px; }
   .letter-stamp { top: 40px; right: 28px; width: 44px; height: 52px; }
+  .delivery-ribbon { top: 38px; right: 25px; width: 48px; height: 48px; }
   .modal-order-details { grid-template-columns: 1fr; }
   .modal-actions { grid-template-columns: 1fr; }
 }

@@ -35,8 +35,13 @@ test("connects the complete order flow", async () => {
   assert.match(game, /Принять заказ/);
   assert.match(game, /setScreen\("match3"\)/);
   assert.match(game, /id="match-board"/);
-  assert.match(game, /Заказ готов/);
+  assert.match(game, /setScreen\("home"\)/);
   assert.match(game, /setCelebrating\(true\)/);
+  assert.match(game, /onEnded=\{celebrating \? finishCelebration/);
+  assert.match(game, /setShowDeliveryModal\(true\)/);
+  assert.match(game, /Отдать заказ/);
+  assert.match(game, /передан клиенту/);
+  assert.match(game, /setCelebrating\(true\)[\s\S]*setScreen\("home"\)/);
 });
 
 test("unlocks drawing when Anna is bored", async () => {
