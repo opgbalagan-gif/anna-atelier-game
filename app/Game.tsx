@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 const BOARD_SIZE = 7;
 const STARTING_MOVES = 24;
-const DRAWING_UNLOCK_AT = 80;
+const DRAWING_UNLOCK_AT = 100;
 
 const STATE_IMAGES = [
   "assets/states/anna-sewing-day.png",

@@ -41,7 +41,7 @@ test("connects the complete order flow", async () => {
 
 test("unlocks drawing when Anna is bored", async () => {
   const game = await readFile(new URL("../app/Game.tsx", import.meta.url), "utf8");
-  assert.match(game, /DRAWING_UNLOCK_AT = 80/);
+  assert.match(game, /DRAWING_UNLOCK_AT = 100/);
   assert.match(game, /drawingUnlocked/);
   assert.match(game, /Нарисуйте узор/);
   assert.match(game, /setBoredom\(5\)/);
