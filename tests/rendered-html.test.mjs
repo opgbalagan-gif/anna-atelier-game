@@ -24,14 +24,13 @@ test("renders the Anna Atelier game", async () => {
   assert.match(html, /Ателье Анны/);
   assert.match(html, /Главный экран ателье/);
   assert.match(html, /Открыть заказ/);
-  assert.match(html, /Заказы/);
   assert.match(html, /Скука/);
   assert.doesNotMatch(html, /codex-preview|SkeletonPreview|Your site is taking shape/i);
 });
 
 test("connects the complete order flow", async () => {
   const game = await readFile(new URL("../app/Game.tsx", import.meta.url), "utf8");
-  assert.match(game, /type Screen = "home" \| "match3" \| "orders" \| "drawing"/);
+  assert.match(game, /type Screen = "home" \| "match3" \| "drawing"/);
   assert.match(game, /Принять заказ/);
   assert.match(game, /setScreen\("match3"\)/);
   assert.match(game, /id="match-board"/);
@@ -40,7 +39,6 @@ test("connects the complete order flow", async () => {
   assert.match(game, /onEnded=\{celebrating \? finishCelebration/);
   assert.match(game, /setShowOrderReadyMessage\(true\)/);
   assert.match(game, /Заказ готов!/);
-  assert.match(game, /setCompletedOrders/);
   assert.match(game, /Заказ «\$\{finishedTitle\}» готов!/);
   assert.doesNotMatch(game, /showDeliveryModal|deliverOrder|Отдать заказ|передан клиенту/);
 });
@@ -91,7 +89,14 @@ test("keeps only the title above Anna on mobile", async () => {
   assert.match(game, /mobile-player-panel/);
   assert.match(css, /\.topbar > \.topbar-stats\s*\{\s*display: none/);
   assert.match(css, /\.mobile-player-panel\s*\{\s*display: block/);
-  assert.match(css, /\.app-nav\s*\{[^}]*position: fixed[^}]*bottom:/);
+  assert.doesNotMatch(game, /className="app-nav"/);
+  assert.match(game, /className="inline-back-button"/);
+});
+
+test("removes the separate Atelier and Orders tab panel", async () => {
+  const game = await readFile(new URL("../app/Game.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(game, /const gameNav|className="app-nav"|setScreen\("orders"\)|ordersScreen/);
+  assert.match(game, /aria-label="Вернуться к Анне"/);
 });
 
 test("supports swipe controls on the match-three board", async () => {
@@ -116,9 +121,20 @@ test("moves the mobile match-three board closer to the top", async () => {
 
 test("unlocks drawing when Anna is bored", async () => {
   const game = await readFile(new URL("../app/Game.tsx", import.meta.url), "utf8");
-  assert.match(game, /DRAWING_UNLOCK_AT = 100/);
+  assert.match(game, /DRAWING_UNLOCK_AT = 50/);
   assert.match(game, /drawingUnlocked/);
   assert.match(game, /Нарисуйте узор/);
   assert.match(game, /setBoredom\(5\)/);
   assert.doesNotMatch(game, /болез|illness|sick/i);
+});
+
+test("keeps each Anna video ready for streaming playback", async () => {
+  const filenames = ["anna-bored.mp4", "anna-celebrates.mp4", "anna-eating.mp4", "anna-hungry.mp4", "anna-sewing.mp4", "anna-tired.mp4"];
+  for (const filename of filenames) {
+    const video = await readFile(new URL(`../public/assets/videos/${filename}`, import.meta.url));
+    const moovOffset = video.indexOf(Buffer.from("moov"));
+    const mediaOffset = video.indexOf(Buffer.from("mdat"));
+    assert.ok(moovOffset > 0 && mediaOffset > 0, `${filename} contains MP4 playback boxes`);
+    assert.ok(moovOffset < mediaOffset, `${filename} stores its playback index before media data`);
+  }
 });
