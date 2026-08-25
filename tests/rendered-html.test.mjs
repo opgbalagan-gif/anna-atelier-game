@@ -38,10 +38,29 @@ test("connects the complete order flow", async () => {
   assert.match(game, /setScreen\("home"\)/);
   assert.match(game, /setCelebrating\(true\)/);
   assert.match(game, /onEnded=\{celebrating \? finishCelebration/);
-  assert.match(game, /setShowDeliveryModal\(true\)/);
-  assert.match(game, /Отдать заказ/);
-  assert.match(game, /передан клиенту/);
-  assert.match(game, /setCelebrating\(true\)[\s\S]*setScreen\("home"\)/);
+  assert.match(game, /setShowOrderReadyMessage\(true\)/);
+  assert.match(game, /Заказ готов!/);
+  assert.match(game, /setCompletedOrders/);
+  assert.match(game, /Заказ «\$\{finishedTitle\}» готов!/);
+  assert.doesNotMatch(game, /showDeliveryModal|deliverOrder|Отдать заказ|передан клиенту/);
+});
+
+test("keeps every activity inside one studio window", async () => {
+  const game = await readFile(new URL("../app/Game.tsx", import.meta.url), "utf8");
+  assert.match(game, /className=\{`studio-window studio-window-\$\{screen\}`\}/);
+  assert.match(game, /aria-label="Главное окно игры"/);
+  assert.match(game, /aria-label="Игра три в ряд"/);
+  assert.match(game, /aria-label="Игра с рисунками"/);
+  assert.doesNotMatch(game, /className="screen-topline"/);
+});
+
+test("shows the active match-three task below the board", async () => {
+  const game = await readFile(new URL("../app/Game.tsx", import.meta.url), "utf8");
+  const boardIndex = game.indexOf('aria-label="Игровое поле 7 на 7"');
+  const taskIndex = game.indexOf('className={`match-task-card panel');
+  assert.ok(boardIndex >= 0, "match-three board is present");
+  assert.ok(taskIndex > boardIndex, "order task follows the board");
+  assert.match(game, /Задание заказа/);
 });
 
 test("switches Anna states without static pictures", async () => {
@@ -76,8 +95,7 @@ test("moves the mobile match-three board closer to the top", async () => {
   const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
   assert.match(game, /screen === "match3" \? "topbar topbar-match-hidden"/);
   assert.match(css, /\.topbar\.topbar-match-hidden\s*\{\s*display: none/);
-  assert.match(css, /\.topbar-match-hidden ~ \.screen-enter \.screen-topline\s*\{[^}]*flex-direction: row/);
-  assert.match(css, /\.topbar-match-hidden ~ \.screen-enter \.board-panel\s*\{\s*padding-top: 15px/);
+  assert.match(css, /\.topbar-match-hidden ~ \.studio-window \.board-panel\s*\{\s*padding-top: 15px/);
   assert.doesNotMatch(css, /:has\(#match-board\)/);
 });
 
