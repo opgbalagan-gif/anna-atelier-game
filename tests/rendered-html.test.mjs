@@ -60,6 +60,17 @@ test("keeps only the title above Anna on mobile", async () => {
   assert.match(css, /\.app-nav\s*\{[^}]*position: fixed[^}]*bottom:/);
 });
 
+test("supports swipe controls on the match-three board", async () => {
+  const game = await readFile(new URL("../app/Game.tsx", import.meta.url), "utf8");
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  assert.match(game, /function beginSwipe/);
+  assert.match(game, /function endSwipe/);
+  assert.match(game, /onPointerDown=\{\(event\) => beginSwipe\(index, event\)\}/);
+  assert.match(game, /onPointerUp=\{endSwipe\}/);
+  assert.match(game, /trySwap\(start\.index, target\)/);
+  assert.match(css, /\.match-board\s*\{[^}]*touch-action: none/);
+});
+
 test("unlocks drawing when Anna is bored", async () => {
   const game = await readFile(new URL("../app/Game.tsx", import.meta.url), "utf8");
   assert.match(game, /DRAWING_UNLOCK_AT = 100/);

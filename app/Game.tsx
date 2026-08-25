@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { PointerEvent as ReactPointerEvent } from "react";
 
 const BOARD_SIZE = 7;
 const STARTING_MOVES = 24;
@@ -127,6 +128,8 @@ export default function Game() {
   const [screen, setScreen] = useState<Screen>("home");
   const [board, setBoard] = useState<Board>(() => makeBoard());
   const [selected, setSelected] = useState<number | null>(null);
+  const swipeStart = useRef<{ index: number; x: number; y: number; pointerId: number } | null>(null);
+  const suppressNextClick = useRef(false);
   const [matched, setMatched] = useState<Set<number>>(() => new Set());
   const [busy, setBusy] = useState(false);
   const [score, setScore] = useState(0);
@@ -227,19 +230,59 @@ export default function Game() {
     }, 260);
   }
 
-  function selectTile(index: number) {
+  function trySwap(first: number, second: number) {
     if (busy || orderReady || !activeOrder) return;
     if (moves <= 0) return setToast("Ходы закончились — начните новый день");
-    if (selected === null) return setSelected(index);
-    if (selected === index) return setSelected(null);
-    if (!areNeighbours(selected, index)) { setSelected(index); setToast("Выберите соседнюю фишку"); return; }
-    const swapped = [...board]; [swapped[selected], swapped[index]] = [swapped[index], swapped[selected]]; setSelected(null);
+    const swapped = [...board]; [swapped[first], swapped[second]] = [swapped[second], swapped[first]]; setSelected(null);
     if (findMatches(swapped).size === 0) {
       setBoard(swapped); setBusy(true); setToast("Здесь ряд не складывается");
       window.setTimeout(() => { setBoard(board); setBusy(false); }, 280); return;
     }
     setBoard(swapped); setBusy(true); setToast("Материалы собраны!");
     window.setTimeout(() => runCascade(swapped, 1, 0, Array(TILE_TYPES.length).fill(0)), 180);
+  }
+
+  function selectTile(index: number) {
+    if (suppressNextClick.current) { suppressNextClick.current = false; return; }
+    if (busy || orderReady || !activeOrder) return;
+    if (moves <= 0) return setToast("Ходы закончились — начните новый день");
+    if (selected === null) return setSelected(index);
+    if (selected === index) return setSelected(null);
+    if (!areNeighbours(selected, index)) { setSelected(index); setToast("Выберите соседнюю фишку"); return; }
+    trySwap(selected, index);
+  }
+
+  function beginSwipe(index: number, event: ReactPointerEvent<HTMLButtonElement>) {
+    if (!event.isPrimary || busy || orderReady || !activeOrder || moves <= 0) return;
+    suppressNextClick.current = false;
+    swipeStart.current = { index, x: event.clientX, y: event.clientY, pointerId: event.pointerId };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function endSwipe(event: ReactPointerEvent<HTMLButtonElement>) {
+    const start = swipeStart.current;
+    if (!start || start.pointerId !== event.pointerId) return;
+    swipeStart.current = null;
+    const deltaX = event.clientX - start.x;
+    const deltaY = event.clientY - start.y;
+    if (Math.max(Math.abs(deltaX), Math.abs(deltaY)) < 24) return;
+
+    suppressNextClick.current = true;
+    window.setTimeout(() => { suppressNextClick.current = false; }, 0);
+    setSelected(null);
+    const horizontal = Math.abs(deltaX) > Math.abs(deltaY);
+    const target = horizontal
+      ? start.index + (deltaX > 0 ? 1 : -1)
+      : start.index + (deltaY > 0 ? BOARD_SIZE : -BOARD_SIZE);
+    if (target < 0 || target >= board.length || !areNeighbours(start.index, target)) {
+      setToast("Смахните фишку к соседней клетке");
+      return;
+    }
+    trySwap(start.index, target);
+  }
+
+  function cancelSwipe() {
+    swipeStart.current = null;
   }
 
   function careForAnna(kind: "food" | "rest" | "sew") {
@@ -295,7 +338,7 @@ export default function Game() {
 
   const homeScreen = <section className="home-layout screen-enter" aria-label="Главный экран ателье">{annaCard}<div className="mobile-player-panel">{playerStats}</div><aside className="home-sidebar"><section className="home-action-card panel"><div className="section-heading"><div><p className="eyebrow">Сегодня в ателье</p><h2>{activeOrder ? orderReady ? "Заказ можно отдать" : "Заказ в работе" : hasAvailableOrder ? "Новое письмо" : "Все готово"}</h2></div><span className="mail-seal">{activeOrder ? "✂" : "✉"}</span></div>{activeOrder ? <div className="home-order-preview"><div className="client-row"><div className="client-avatar">{order.client.slice(0, 1)}</div><div><small>Клиент</small><strong>{order.client}</strong></div></div><h3>{order.title}</h3><p>{order.note}</p><div className="home-progress"><span style={{ width: `${(orderProgress / order.goal) * 100}%` }} /></div><div className="progress-copy"><span>Материалы</span><strong>{orderProgress}/{order.goal}</strong></div><button type="button" className="primary-button" disabled={celebrating} onClick={() => orderReady ? setShowDeliveryModal(true) : setScreen("match3")}>{celebrating ? "Анна радуется…" : orderReady ? "Отдать заказ" : "Продолжить шить"}</button></div> : hasAvailableOrder ? <div className="letter-preview"><p>«Анна, очень надеюсь на ваше мастерство. Мне нужен особенный наряд…»</p><div><strong>{order.client}</strong><span>{order.time}</span></div><button type="button" className="primary-button" onClick={() => setShowOrderModal(true)}>Открыть заказ</button></div> : <div className="empty-day"><span>✓</span><h3>Все заказы выполнены</h3><p>Можно отдохнуть или порисовать новые эскизы.</p></div>}</section><section className={`inspiration-card panel${drawingUnlocked ? " inspiration-ready" : ""}`}><div><p className="eyebrow">творческое настроение</p><h3>{drawingUnlocked ? "Скука заполнилась" : "Альбом эскизов"}</h3><p>{drawingUnlocked ? "Анне пора отвлечься и нарисовать новый узор." : `Мини-игра откроется при скуке ${DRAWING_UNLOCK_AT}%`}</p></div><button type="button" disabled={!drawingUnlocked || celebrating} onClick={() => setScreen("drawing")}>{drawingUnlocked ? "Рисовать" : `${Math.round(boredom)}%`}</button></section><section className="home-note panel"><span>⌁</span><p><strong>Совет Анны</strong>Соберите материал в «3 в ряд», посмотрите, как Анна радуется, и передайте заказ клиенту.</p></section></aside></section>;
 
-  const matchScreen = activeOrder ? <section className="screen-enter"><div className="screen-topline"><button type="button" className="back-button" onClick={() => setScreen("home")}>← В ателье</button><div><p className="eyebrow">заказ в работе</p><h2>{order.title}</h2></div></div><div className="match-layout"><section id="match-board" className="board-panel panel" aria-label="Поле три в ряд"><div className="section-heading board-heading"><div><p className="eyebrow">мастерская · этап материалов</p><h2>Соберите материалы</h2></div><div className={`moves-badge${moves <= 5 ? " moves-low" : ""}`}><strong>{moves}</strong><span>ходов</span></div></div><div className="task-strip"><TileSprite type={order.tile} small /><div><span>Нужно для заказа</span><strong>{TILE_TYPES[order.tile].short}</strong></div><div className="mini-progress"><span style={{ width: `${(orderProgress / order.goal) * 100}%` }} /></div><b>{orderProgress}/{order.goal}</b></div><div className={`match-board${busy ? " board-busy" : ""}`} role="grid" aria-label="Игровое поле 7 на 7">{board.map((type, index) => <button className={`tile tile-type-${type}${selected === index ? " tile-selected" : ""}${matched.has(index) ? " tile-matched" : ""}`} key={index} type="button" role="gridcell" aria-label={`${TILE_TYPES[type].name}, ряд ${Math.floor(index / BOARD_SIZE) + 1}, столбец ${(index % BOARD_SIZE) + 1}`} aria-pressed={selected === index} onClick={() => selectTile(index)} disabled={busy || orderReady}><TileSprite type={type} /></button>)}</div><div className="board-footer"><p aria-live="polite"><span>✦</span>{toast}</p><button type="button" className="text-button" onClick={startNewDay}>Новый день</button></div></section><aside className="order-brief-stack"><section className={`order-card panel${orderReady ? " order-ready" : ""}`}><div className="order-topline"><span>Текущий заказ</span><b>{order.time}</b></div><div className="client-row"><div className="client-avatar">{order.client.slice(0, 1)}</div><div><small>Клиент</small><strong>{order.client}</strong></div></div><div className="dress-sketch" aria-hidden="true"><div className="dress-hanger" /><div className="dress-bodice" /><div className="dress-skirt" /><span>✿</span></div><h2>{order.title}</h2><p>{order.note}</p><div className="order-material"><TileSprite type={order.tile} small /><div><span>Материал собран</span><strong>{orderProgress} из {order.goal}</strong></div><div className="ring-progress">{Math.round((orderProgress / order.goal) * 100)}%</div></div><button type="button" className="primary-button ready-button" disabled>{orderReady ? "Возвращаемся к Анне…" : "Сначала соберите материал"}</button></section><div className="tip-card"><span>⌁</span><p><strong>Как играть</strong>Меняйте соседние фишки и собирайте ряды от трёх.</p></div></aside></div></section> : homeScreen;
+  const matchScreen = activeOrder ? <section className="screen-enter"><div className="screen-topline"><button type="button" className="back-button" onClick={() => setScreen("home")}>← В ателье</button><div><p className="eyebrow">заказ в работе</p><h2>{order.title}</h2></div></div><div className="match-layout"><section id="match-board" className="board-panel panel" aria-label="Поле три в ряд"><div className="section-heading board-heading"><div><p className="eyebrow">мастерская · этап материалов</p><h2>Соберите материалы</h2></div><div className={`moves-badge${moves <= 5 ? " moves-low" : ""}`}><strong>{moves}</strong><span>ходов</span></div></div><div className="task-strip"><TileSprite type={order.tile} small /><div><span>Нужно для заказа</span><strong>{TILE_TYPES[order.tile].short}</strong></div><div className="mini-progress"><span style={{ width: `${(orderProgress / order.goal) * 100}%` }} /></div><b>{orderProgress}/{order.goal}</b></div><div className={`match-board${busy ? " board-busy" : ""}`} role="grid" aria-label="Игровое поле 7 на 7">{board.map((type, index) => <button className={`tile tile-type-${type}${selected === index ? " tile-selected" : ""}${matched.has(index) ? " tile-matched" : ""}`} key={index} type="button" role="gridcell" aria-label={`${TILE_TYPES[type].name}, ряд ${Math.floor(index / BOARD_SIZE) + 1}, столбец ${(index % BOARD_SIZE) + 1}`} aria-selected={selected === index} onClick={() => selectTile(index)} onPointerDown={(event) => beginSwipe(index, event)} onPointerUp={endSwipe} onPointerCancel={cancelSwipe} disabled={busy || orderReady}><TileSprite type={type} /></button>)}</div><div className="board-footer"><p aria-live="polite"><span>✦</span>{toast}</p><button type="button" className="text-button" onClick={startNewDay}>Новый день</button></div></section><aside className="order-brief-stack"><section className={`order-card panel${orderReady ? " order-ready" : ""}`}><div className="order-topline"><span>Текущий заказ</span><b>{order.time}</b></div><div className="client-row"><div className="client-avatar">{order.client.slice(0, 1)}</div><div><small>Клиент</small><strong>{order.client}</strong></div></div><div className="dress-sketch" aria-hidden="true"><div className="dress-hanger" /><div className="dress-bodice" /><div className="dress-skirt" /><span>✿</span></div><h2>{order.title}</h2><p>{order.note}</p><div className="order-material"><TileSprite type={order.tile} small /><div><span>Материал собран</span><strong>{orderProgress} из {order.goal}</strong></div><div className="ring-progress">{Math.round((orderProgress / order.goal) * 100)}%</div></div><button type="button" className="primary-button ready-button" disabled>{orderReady ? "Возвращаемся к Анне…" : "Сначала соберите материал"}</button></section><div className="tip-card"><span>⌁</span><p><strong>Как играть</strong>Смахивайте фишки к соседним клеткам и собирайте ряды от трёх.</p></div></aside></div></section> : homeScreen;
 
   const ordersScreen = <section className="orders-page panel screen-enter" aria-label="Заказы"><div className="orders-header"><div><p className="eyebrow">книга мастерской</p><h2>Заказы</h2><p>Здесь хранятся новые, текущие и завершённые работы.</p></div><span>{completedOrders.length}/{ORDERS.length}</span></div><div className="orders-grid">{ORDERS.map((item, index) => { const completed = completedOrders.includes(index), current = activeOrder && index === orderIndex, available = !activeOrder && index === orderIndex && hasAvailableOrder; return <article className={`orders-list-card${completed ? " order-completed" : ""}${current ? " order-current" : ""}`} key={item.title}><div className="order-list-number">{completed ? "✓" : index + 1}</div><div className="order-list-copy"><div><span>{item.client}</span><b>{completed ? "Готово" : current ? orderReady ? "Можно отдать" : "В работе" : available ? "Новое" : "Ожидает"}</b></div><h3>{item.title}</h3><p>{item.note}</p><small>Награда {item.reward} ● · {item.time}</small></div>{current && <button type="button" disabled={celebrating} onClick={() => orderReady ? setShowDeliveryModal(true) : setScreen("match3")}>{celebrating ? "Анна радуется…" : orderReady ? "Отдать" : `${orderProgress}/${item.goal}`}</button>}{available && <button type="button" onClick={() => setShowOrderModal(true)}>Открыть</button>}</article>; })}</div></section>;
 
