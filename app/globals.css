@@ -1473,6 +1473,61 @@ h1 {
   .modal-actions { grid-template-columns: 1fr; }
 }
 
+@media (max-width: 760px) {
+  .game-shell:has(#match-board) {
+    padding-top: 4px;
+  }
+
+  .game-shell:has(#match-board) .topbar {
+    display: none;
+  }
+
+  .game-shell:has(#match-board) .screen-topline {
+    min-height: 48px;
+    align-items: center;
+    flex-direction: row;
+    gap: 10px;
+    margin: 0 0 8px;
+    padding: 0 2px;
+  }
+
+  .game-shell:has(#match-board) .screen-topline .eyebrow,
+  .game-shell:has(#match-board) .board-heading .eyebrow {
+    display: none;
+  }
+
+  .game-shell:has(#match-board) .screen-topline h2 {
+    margin: 0;
+    font-size: 22px;
+    line-height: 1;
+  }
+
+  .game-shell:has(#match-board) .back-button {
+    min-height: 38px;
+    padding: 0 11px;
+  }
+
+  .game-shell:has(#match-board) .board-panel {
+    padding-top: 15px;
+  }
+
+  .game-shell:has(#match-board) .board-heading {
+    margin-bottom: 9px;
+  }
+
+  .game-shell:has(#match-board) .board-heading h2 {
+    font-size: 26px;
+  }
+
+  .game-shell:has(#match-board) .moves-badge {
+    height: 48px;
+  }
+
+  .game-shell:has(#match-board) .task-strip {
+    margin-bottom: 9px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

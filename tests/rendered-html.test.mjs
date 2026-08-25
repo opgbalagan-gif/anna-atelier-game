@@ -71,6 +71,13 @@ test("supports swipe controls on the match-three board", async () => {
   assert.match(css, /\.match-board\s*\{[^}]*touch-action: none/);
 });
 
+test("moves the mobile match-three board closer to the top", async () => {
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  assert.match(css, /\.game-shell:has\(#match-board\) \.topbar\s*\{\s*display: none/);
+  assert.match(css, /\.game-shell:has\(#match-board\) \.screen-topline\s*\{[^}]*flex-direction: row/);
+  assert.match(css, /\.game-shell:has\(#match-board\) \.board-panel\s*\{\s*padding-top: 15px/);
+});
+
 test("unlocks drawing when Anna is bored", async () => {
   const game = await readFile(new URL("../app/Game.tsx", import.meta.url), "utf8");
   assert.match(game, /DRAWING_UNLOCK_AT = 100/);
