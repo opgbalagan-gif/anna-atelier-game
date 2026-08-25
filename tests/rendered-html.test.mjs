@@ -48,7 +48,7 @@ test("keeps every activity inside one studio window", async () => {
   assert.match(game, /className=\{`studio-window studio-window-\$\{screen\}`\}/);
   assert.match(game, /aria-label="Главное окно игры"/);
   assert.match(game, /aria-label="Игра три в ряд"/);
-  assert.match(game, /aria-label="Игра с рисунками"/);
+  assert.match(game, /aria-label="Игра с рисованием"/);
   assert.doesNotMatch(game, /className="screen-topline"/);
 });
 
@@ -121,11 +121,27 @@ test("moves the mobile match-three board closer to the top", async () => {
 
 test("unlocks drawing when Anna is bored", async () => {
   const game = await readFile(new URL("../app/Game.tsx", import.meta.url), "utf8");
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
   assert.match(game, /DRAWING_UNLOCK_AT = 50/);
   assert.match(game, /drawingUnlocked/);
-  assert.match(game, /Нарисуйте узор/);
+  assert.match(game, /Картина Анны/);
+  assert.match(game, /onPointerMove=\{continueSketchLine\}/);
+  assert.match(game, /Контур готов/);
+  assert.match(game, /Выберите цвет/);
+  assert.match(game, /Украсьте картину/);
   assert.match(game, /setBoredom\(5\)/);
+  assert.match(css, /\.trace-canvas\s*\{[^}]*touch-action: none/);
+  assert.doesNotMatch(game, /DRAWING_PATTERN|chooseDrawing/);
   assert.doesNotMatch(game, /болез|illness|sick/i);
+});
+
+test("ships generated tracing pictures for the drawing game", async () => {
+  const filenames = ["sketch-flower.png", "sketch-dress.png", "sketch-kitten.png"];
+  for (const filename of filenames) {
+    const picture = await readFile(new URL(`../public/assets/drawing/${filename}`, import.meta.url));
+    assert.deepEqual([...picture.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10], `${filename} is a PNG`);
+    assert.ok(picture.length > 100_000, `${filename} contains the generated illustration`);
+  }
 });
 
 test("keeps each Anna video ready for streaming playback", async () => {

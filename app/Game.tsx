@@ -22,15 +22,27 @@ const ORDERS = [
   { client: "Семья Орловых", title: "Пальто для прогулок", note: "Тёплое, удобное и с яркими пуговицами", tile: 1, goal: 14, reward: 85, time: "4 дня" },
 ] as const;
 
-const DRAWING_MOTIFS = [
-  { symbol: "✿", name: "цветок", tone: "rose" },
-  { symbol: "❧", name: "листок", tone: "teal" },
-  { symbol: "♡", name: "сердце", tone: "coral" },
-  { symbol: "✦", name: "звезда", tone: "gold" },
-  { symbol: "⌁", name: "волна", tone: "blue" },
-  { symbol: "◌", name: "пуговка", tone: "violet" },
+const DRAWING_SKETCHES = [
+  { name: "Цветок", instruction: "Проведите пальцем по лепесткам, листьям и стеблю", asset: "assets/drawing/sketch-flower.png" },
+  { name: "Платье", instruction: "Обведите воротник, рукава и пышную юбку", asset: "assets/drawing/sketch-dress.png" },
+  { name: "Котёнок", instruction: "Обведите ушки, лапки и пушистый хвост", asset: "assets/drawing/sketch-kitten.png" },
 ] as const;
-const DRAWING_PATTERN = [0, 3, 1, 2];
+
+const DRAWING_COLORS = [
+  { id: "rose", name: "Роза", value: "#b85f69" },
+  { id: "teal", name: "Мята", value: "#3f817c" },
+  { id: "gold", name: "Мёд", value: "#d29a3c" },
+  { id: "violet", name: "Слива", value: "#796383" },
+] as const;
+
+const DRAWING_STAMPS = [
+  { symbol: "✿", name: "Цветы" },
+  { symbol: "♡", name: "Сердца" },
+  { symbol: "✦", name: "Искры" },
+] as const;
+
+type DrawingPhase = "trace" | "color" | "stamp" | "done";
+type DrawingColor = (typeof DRAWING_COLORS)[number]["id"];
 
 type Board = number[];
 type Screen = "home" | "match3" | "drawing";
@@ -147,8 +159,16 @@ export default function Game() {
   const [boredom, setBoredom] = useState(28);
   const [temporaryState, setTemporaryState] = useState<"eating" | null>(null);
   const [toast, setToast] = useState("В ателье пришёл новый заказ");
-  const [drawingStep, setDrawingStep] = useState(0);
-  const [drawingFeedback, setDrawingFeedback] = useState("Повторите узор по порядку");
+  const drawingCanvas = useRef<HTMLCanvasElement | null>(null);
+  const drawingPointer = useRef<{ pointerId: number; x: number; y: number } | null>(null);
+  const drawingDistance = useRef(0);
+  const [drawingSketchIndex, setDrawingSketchIndex] = useState(0);
+  const [drawingPhase, setDrawingPhase] = useState<DrawingPhase>("trace");
+  const [drawingProgress, setDrawingProgress] = useState(0);
+  const [drawingColor, setDrawingColor] = useState<DrawingColor>("rose");
+  const [drawingStamp, setDrawingStamp] = useState<string | null>(null);
+  const [drawingFeedback, setDrawingFeedback] = useState("Начните вести карандаш по контуру");
+  const [completedSketches, setCompletedSketches] = useState<number[]>([]);
 
   const hasAvailableOrder = orderIndex < ORDERS.length;
   const order = ORDERS[Math.min(orderIndex, ORDERS.length - 1)];
@@ -317,15 +337,93 @@ export default function Game() {
     setBoard(makeBoard(Date.now() % 100000)); setSelected(null); setMatched(new Set()); setMoves(STARTING_MOVES); setToast("Новый день в мастерской начался");
   }
 
-  function chooseDrawing(motifIndex: number) {
-    if (motifIndex !== DRAWING_PATTERN[drawingStep]) { setDrawingStep(0); setDrawingFeedback("Линия сбилась — начните узор заново"); return; }
-    const nextStep = drawingStep + 1;
-    if (nextStep === DRAWING_PATTERN.length) {
-      setDrawingStep(DRAWING_PATTERN.length); setDrawingFeedback("Эскиз готов! Анна снова полна идей");
-      setBoredom(5); setScore((value) => value + 140); setCoins((value) => value + 8); setToast("Новый эскиз готов · +140 очков");
-      window.setTimeout(() => { setDrawingStep(0); setDrawingFeedback("Повторите узор по порядку"); setScreen("home"); }, 1500); return;
+  function prepareDrawingCanvas(canvas: HTMLCanvasElement) {
+    const bounds = canvas.getBoundingClientRect();
+    const scale = window.devicePixelRatio || 1;
+    const width = Math.max(1, Math.round(bounds.width * scale));
+    const height = Math.max(1, Math.round(bounds.height * scale));
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
     }
-    setDrawingStep(nextStep); setDrawingFeedback(`Верно! Осталось штрихов: ${DRAWING_PATTERN.length - nextStep}`);
+    const context = canvas.getContext("2d");
+    if (!context) return null;
+    context.setTransform(scale, 0, 0, scale, 0, 0);
+    context.lineCap = "round";
+    context.lineJoin = "round";
+    context.lineWidth = Math.max(5, bounds.width / 65);
+    context.strokeStyle = "#8f444c";
+    return { bounds, context };
+  }
+
+  function beginSketchLine(event: ReactPointerEvent<HTMLCanvasElement>) {
+    if (!event.isPrimary || drawingPhase !== "trace") return;
+    const prepared = prepareDrawingCanvas(event.currentTarget);
+    if (!prepared) return;
+    const x = event.clientX - prepared.bounds.left;
+    const y = event.clientY - prepared.bounds.top;
+    drawingPointer.current = { pointerId: event.pointerId, x, y };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    prepared.context.beginPath();
+    prepared.context.moveTo(x, y);
+    prepared.context.lineTo(x + 0.01, y + 0.01);
+    prepared.context.stroke();
+  }
+
+  function continueSketchLine(event: ReactPointerEvent<HTMLCanvasElement>) {
+    const previous = drawingPointer.current;
+    if (!previous || previous.pointerId !== event.pointerId || drawingPhase !== "trace") return;
+    event.preventDefault();
+    const prepared = prepareDrawingCanvas(event.currentTarget);
+    if (!prepared) return;
+    const x = event.clientX - prepared.bounds.left;
+    const y = event.clientY - prepared.bounds.top;
+    prepared.context.lineTo(x, y);
+    prepared.context.stroke();
+    drawingDistance.current += Math.hypot(x - previous.x, y - previous.y);
+    drawingPointer.current = { pointerId: event.pointerId, x, y };
+    const targetDistance = Math.max(460, prepared.bounds.width * 2.35);
+    const progress = Math.min(100, Math.round((drawingDistance.current / targetDistance) * 100));
+    setDrawingProgress(progress);
+    if (progress >= 70) setDrawingFeedback("Контур готов — теперь добавим цвет");
+    else if (progress >= 35) setDrawingFeedback("Красиво получается, продолжайте обводить");
+  }
+
+  function endSketchLine(event: ReactPointerEvent<HTMLCanvasElement>) {
+    if (drawingPointer.current?.pointerId !== event.pointerId) return;
+    drawingPointer.current = null;
+  }
+
+  function clearDrawingCanvas() {
+    const canvas = drawingCanvas.current;
+    if (canvas) {
+      const context = canvas.getContext("2d");
+      context?.clearRect(0, 0, canvas.width, canvas.height);
+    }
+    drawingPointer.current = null;
+    drawingDistance.current = 0;
+    setDrawingProgress(0);
+    setDrawingFeedback("Начните вести карандаш по контуру");
+  }
+
+  function finishDrawingGame() {
+    if (!drawingStamp || drawingPhase !== "stamp") return;
+    const finishedSketch = drawingSketchIndex;
+    setDrawingPhase("done");
+    setDrawingFeedback("Картина готова! Анна снова полна идей");
+    setCompletedSketches((items) => items.includes(finishedSketch) ? items : [...items, finishedSketch]);
+    setBoredom(5);
+    setScore((value) => value + 140);
+    setCoins((value) => value + 8);
+    setToast("Новая картина готова · +140 очков · +8 монет");
+    window.setTimeout(() => {
+      setDrawingSketchIndex((value) => (value + 1) % DRAWING_SKETCHES.length);
+      setDrawingPhase("trace");
+      setDrawingColor("rose");
+      setDrawingStamp(null);
+      clearDrawingCanvas();
+      setScreen("home");
+    }, 1700);
   }
 
   const playerStats = <div className="topbar-stats" aria-label="Игровые показатели"><div className="stat-chip"><span>✦</span><strong>{score.toLocaleString("ru-RU")}</strong><small>очки</small></div><div className="stat-chip stat-coin"><span>●</span><strong>{coins}</strong><small>монеты</small></div><div className="level-chip"><div><strong>Уровень 1</strong><span>{Math.round(levelProgress)}%</span></div><div className="level-track"><span style={{ width: `${levelProgress}%` }} /></div></div></div>;
@@ -336,11 +434,12 @@ export default function Game() {
 
   const annaCard = <aside className="anna-card panel"><div className="character-stage"><video key={annaVisual.video} className="scene-image" autoPlay loop={!celebrating} muted playsInline preload="auto" aria-label={annaVisual.alt} onEnded={celebrating ? finishCelebration : undefined}><source src={annaVisual.video} type="video/mp4" /></video><div className="stage-glow" /><div className="status-pill"><span>{annaVisual.id === "sewing" ? "✂" : annaVisual.icon}</span><strong>{annaVisual.status}</strong></div>{!activeOrder && hasAvailableOrder ? <button type="button" className="mood-bubble order-alert-bubble" aria-label={`Новый заказ: ${order.title}`} aria-expanded={showOrderModal} onClick={() => setShowOrderModal((value) => !value)}><span>✉</span><b>!</b></button> : <span className={`mood-bubble${annaVisual.id !== "sewing" ? " boredom-alert" : ""}`} aria-label={`Состояние Анны: ${annaVisual.status}`}>{annaVisual.icon}</span>}</div>{orderInboxCard}<div className="anna-copy"><div className="section-heading compact-heading"><div><p className="eyebrow">хозяйка ателье</p><h2>Анна</h2></div><span className="care-score">{averageCare}%</span></div><p className="anna-state">{annaState}</p>{celebrating && <div className="celebration-banner"><span>✦</span><strong>Заказ готов!</strong><small>{toast}</small></div>}<div className="meters"><Meter label="Сытость" value={hunger} tone="coral" /><Meter label="Энергия" value={energy} tone="gold" /><Meter label="Скука" value={boredom} tone="boredom" /></div><div className={`care-actions${drawingUnlocked ? " has-drawing" : ""}`}><button type="button" disabled={celebrating} onClick={() => careForAnna("food")}><span>☕</span><strong>Перекус</strong><small>8 ●</small></button><button type="button" disabled={celebrating} onClick={() => careForAnna("rest")}><span>☁</span><strong>Отдых</strong><small>6 ●</small></button><button type="button" onClick={() => careForAnna("sew")} disabled={celebrating || orderReady}><span>✂</span><strong>{celebrating ? "Радуется" : orderReady ? "Готово" : activeOrder ? "Шить" : "Заказ"}</strong><small>{celebrating ? "подождите" : orderReady ? "награда скоро" : activeOrder ? "продолжить" : "принять"}</small></button>{drawingUnlocked && <button type="button" className="drawing-action" disabled={celebrating} onClick={() => setScreen("drawing")}><span>✎</span><strong>Рисовать</strong><small>− скука</small></button>}</div></div></aside>;
 
-  const homeScreen = <section className="home-layout screen-enter" aria-label="Главный экран ателье">{annaCard}<div className="mobile-player-panel">{playerStats}</div><aside className="home-sidebar"><section className="home-action-card panel"><div className="section-heading"><div><p className="eyebrow">Сегодня в ателье</p><h2>{activeOrder ? orderReady ? "Заказ готов" : "Заказ в работе" : hasAvailableOrder ? "Новое письмо" : "Все готово"}</h2></div><span className="mail-seal">{activeOrder ? "✂" : "✉"}</span></div>{activeOrder ? <div className="home-order-preview"><div className="client-row"><div className="client-avatar">{order.client.slice(0, 1)}</div><div><small>Клиент</small><strong>{order.client}</strong></div></div><h3>{order.title}</h3><p>{order.note}</p><div className="home-progress"><span style={{ width: `${(orderProgress / order.goal) * 100}%` }} /></div><div className="progress-copy"><span>Материалы</span><strong>{orderProgress}/{order.goal}</strong></div><button type="button" className="primary-button" disabled={celebrating || orderReady} onClick={() => setScreen("match3")}>{celebrating ? "Анна радуется…" : orderReady ? "Заказ готов" : "Продолжить шить"}</button></div> : hasAvailableOrder ? <div className="letter-preview"><p>«Анна, очень надеюсь на ваше мастерство. Мне нужен особенный наряд…»</p><div><strong>{order.client}</strong><span>{order.time}</span></div><button type="button" className="primary-button" onClick={() => setShowOrderModal(true)}>Открыть заказ</button></div> : <div className="empty-day"><span>✓</span><h3>Все заказы выполнены</h3><p>Можно отдохнуть или порисовать новые эскизы.</p></div>}</section><section className={`inspiration-card panel${drawingUnlocked ? " inspiration-ready" : ""}`}><div><p className="eyebrow">творческое настроение</p><h3>{drawingUnlocked ? "Скука заполнилась" : "Альбом эскизов"}</h3><p>{drawingUnlocked ? "Анне пора отвлечься и нарисовать новый узор." : `Мини-игра откроется при скуке ${DRAWING_UNLOCK_AT}%`}</p></div><button type="button" disabled={!drawingUnlocked || celebrating} onClick={() => setScreen("drawing")}>{drawingUnlocked ? "Рисовать" : `${Math.round(boredom)}%`}</button></section><section className="home-note panel"><span>⌁</span><p><strong>Совет Анны</strong>Соберите материал в «3 в ряд» — готовый заказ завершится автоматически после радости Анны.</p></section></aside></section>;
+  const homeScreen = <section className="home-layout screen-enter" aria-label="Главный экран ателье">{annaCard}<div className="mobile-player-panel">{playerStats}</div><aside className="home-sidebar"><section className="home-action-card panel"><div className="section-heading"><div><p className="eyebrow">Сегодня в ателье</p><h2>{activeOrder ? orderReady ? "Заказ готов" : "Заказ в работе" : hasAvailableOrder ? "Новое письмо" : "Все готово"}</h2></div><span className="mail-seal">{activeOrder ? "✂" : "✉"}</span></div>{activeOrder ? <div className="home-order-preview"><div className="client-row"><div className="client-avatar">{order.client.slice(0, 1)}</div><div><small>Клиент</small><strong>{order.client}</strong></div></div><h3>{order.title}</h3><p>{order.note}</p><div className="home-progress"><span style={{ width: `${(orderProgress / order.goal) * 100}%` }} /></div><div className="progress-copy"><span>Материалы</span><strong>{orderProgress}/{order.goal}</strong></div><button type="button" className="primary-button" disabled={celebrating || orderReady} onClick={() => setScreen("match3")}>{celebrating ? "Анна радуется…" : orderReady ? "Заказ готов" : "Продолжить шить"}</button></div> : hasAvailableOrder ? <div className="letter-preview"><p>«Анна, очень надеюсь на ваше мастерство. Мне нужен особенный наряд…»</p><div><strong>{order.client}</strong><span>{order.time}</span></div><button type="button" className="primary-button" onClick={() => setShowOrderModal(true)}>Открыть заказ</button></div> : <div className="empty-day"><span>✓</span><h3>Все заказы выполнены</h3><p>Можно отдохнуть или порисовать новые эскизы.</p></div>}</section><section className={`inspiration-card panel${drawingUnlocked ? " inspiration-ready" : ""}`}><div><p className="eyebrow">творческое настроение</p><h3>{drawingUnlocked ? "Скука заполнилась" : "Альбом эскизов"}</h3><p>{drawingUnlocked ? "Анне пора отвлечься и нарисовать новую картину." : `Мини-игра откроется при скуке ${DRAWING_UNLOCK_AT}%`}</p>{completedSketches.length > 0 && <div className="atelier-gallery" aria-label="Готовые картины Анны">{completedSketches.map((index) => <span key={index} title={DRAWING_SKETCHES[index].name} style={{ backgroundImage: `url("${assetPath(DRAWING_SKETCHES[index].asset)}")` }} />)}</div>}</div><button type="button" disabled={!drawingUnlocked || celebrating} onClick={() => setScreen("drawing")}>{drawingUnlocked ? "Рисовать" : `${Math.round(boredom)}%`}</button></section><section className="home-note panel"><span>⌁</span><p><strong>Совет Анны</strong>Соберите материал в «3 в ряд» — готовый заказ завершится автоматически после радости Анны.</p></section></aside></section>;
 
   const matchScreen = activeOrder ? <section className="screen-enter embedded-game" aria-label="Игра три в ряд"><div className="match-layout"><section id="match-board" className="board-panel panel" aria-label="Поле три в ряд"><div className="section-heading board-heading"><div className="mode-title-row"><button type="button" className="inline-back-button" aria-label="Вернуться к Анне" onClick={() => setScreen("home")}>←</button><div><p className="eyebrow">игра в основном окне</p><h2>Соберите материалы</h2></div></div><div className={`moves-badge${moves <= 5 ? " moves-low" : ""}`}><strong>{moves}</strong><span>ходов</span></div></div><div className={`match-board${busy ? " board-busy" : ""}`} role="grid" aria-label="Игровое поле 7 на 7">{board.map((type, index) => <button className={`tile tile-type-${type}${selected === index ? " tile-selected" : ""}${matched.has(index) ? " tile-matched" : ""}`} key={index} type="button" role="gridcell" aria-label={`${TILE_TYPES[type].name}, ряд ${Math.floor(index / BOARD_SIZE) + 1}, столбец ${(index % BOARD_SIZE) + 1}`} aria-selected={selected === index} onClick={() => selectTile(index)} onPointerDown={(event) => beginSwipe(index, event)} onPointerUp={endSwipe} onPointerCancel={cancelSwipe} disabled={busy || orderReady}><TileSprite type={type} /></button>)}</div>{showOrderReadyMessage && <div className="order-ready-overlay" role="status" aria-live="assertive"><span>✓</span><strong>Заказ готов!</strong><small>Сейчас Анна порадуется своей работе</small></div>}<div className="board-footer"><p aria-live="polite"><span>✦</span>{toast}</p><button type="button" className="text-button" onClick={startNewDay}>Новый день</button></div></section><aside className="order-brief-stack"><section className={`match-task-card panel${orderReady ? " order-ready" : ""}`}><div className="order-topline"><span>Задание заказа</span><b>{order.time}</b></div><div className="match-task-copy"><div className="client-row"><div className="client-avatar">{order.client.slice(0, 1)}</div><div><small>Клиент</small><strong>{order.client}</strong></div></div><div><h2>{order.title}</h2><p>{order.note}</p></div></div><div className="task-strip"><TileSprite type={order.tile} small /><div><span>Нужно собрать</span><strong>{TILE_TYPES[order.tile].short}</strong></div><div className="mini-progress"><span style={{ width: `${(orderProgress / order.goal) * 100}%` }} /></div><b>{orderProgress}/{order.goal}</b></div></section><div className="tip-card"><span>⌁</span><p><strong>Как играть</strong>Смахивайте фишки к соседним клеткам и собирайте ряды от трёх.</p></div></aside></div></section> : homeScreen;
 
-  const drawingScreen = <section className="drawing-page screen-enter embedded-game" aria-label="Игра с рисунками"><div className="drawing-layout"><section className="sketchbook panel"><div className="mode-heading mode-heading-with-back"><button type="button" className="inline-back-button" aria-label="Вернуться к Анне" onClick={() => setScreen("home")}>←</button><div><p className="eyebrow">игра в основном окне · альбом вдохновения</p><h2>Нарисуйте узор</h2></div></div><div className="sketchbook-binding" aria-hidden="true">{Array.from({ length: 9 }, (_, index) => <i key={index} />)}</div><div className="sketch-page"><p className="eyebrow">эскиз № 12</p><h3>Узор для нового платья</h3><p>Нажимайте на рисунки снизу в том же порядке, что в подсказке.</p><div className="drawing-pattern" aria-label="Последовательность узора">{DRAWING_PATTERN.map((motif, index) => <div className={`${index < drawingStep ? "pattern-done" : ""}${index === drawingStep ? " pattern-current" : ""}`} key={`${motif}-${index}`}><span>{DRAWING_MOTIFS[motif].symbol}</span><small>{index + 1}</small></div>)}</div><div className="sketch-result" aria-live="polite"><div className="sketch-dress" aria-hidden="true"><span>{DRAWING_PATTERN.slice(0, drawingStep).map((motif) => DRAWING_MOTIFS[motif].symbol).join(" ")}</span></div><p>{drawingFeedback}</p></div></div></section><aside className="drawing-tools panel"><div><p className="eyebrow">палитра узоров</p><h3>Выберите рисунок</h3></div><div className="motif-grid">{DRAWING_MOTIFS.map((motif, index) => <button type="button" className={`drawing-motif motif-${motif.tone}`} key={motif.name} onClick={() => chooseDrawing(index)} disabled={drawingStep === DRAWING_PATTERN.length}><span>{motif.symbol}</span><small>{motif.name}</small></button>)}</div><div className="drawing-reward"><span>✦</span><div><strong>Награда за эскиз</strong><small>140 очков · скука исчезнет</small></div></div></aside></div></section>;
+  const activeSketch = DRAWING_SKETCHES[drawingSketchIndex];
+  const drawingScreen = <section className="drawing-page screen-enter embedded-game" aria-label="Игра с рисованием"><div className="drawing-layout"><section className="sketchbook panel"><div className="mode-heading mode-heading-with-back"><button type="button" className="inline-back-button" aria-label="Вернуться к Анне" onClick={() => setScreen("home")}>←</button><div><p className="eyebrow">игра в основном окне · альбом вдохновения</p><h2>Картина Анны</h2></div></div><div className="sketchbook-binding" aria-hidden="true">{Array.from({ length: 9 }, (_, index) => <i key={index} />)}</div><div className="sketch-page"><div className="sketch-title-row"><div><p className="eyebrow">эскиз {drawingSketchIndex + 1} из {DRAWING_SKETCHES.length}</p><h3>{activeSketch.name}</h3></div><div className="drawing-progress" aria-label={`Контур готов на ${drawingProgress}%`}><span style={{ width: `${drawingProgress}%` }} /></div></div><p>{drawingPhase === "trace" ? activeSketch.instruction : drawingPhase === "color" ? "Выберите цвет для картины." : drawingPhase === "stamp" ? "Добавьте последний декоративный штамп." : "Картина отправляется в галерею Анны."}</p><div className={`trace-board trace-color-${drawingColor}${drawingPhase === "done" ? " trace-complete" : ""}`}><div className="trace-reference" style={{ backgroundImage: `url("${assetPath(activeSketch.asset)}")` }} aria-hidden="true" /><div className="trace-tint" aria-hidden="true" />{drawingStamp && <div className="stamp-preview" aria-hidden="true"><span>{drawingStamp}</span><span>{drawingStamp}</span><span>{drawingStamp}</span></div>}<canvas ref={drawingCanvas} className="trace-canvas" aria-label={`Обведите рисунок «${activeSketch.name}» пальцем`} onPointerDown={beginSketchLine} onPointerMove={continueSketchLine} onPointerUp={endSketchLine} onPointerCancel={endSketchLine} /></div><div className="drawing-feedback" aria-live="polite"><span>{drawingPhase === "done" ? "✓" : "✎"}</span><p>{drawingFeedback}</p></div></div></section><aside className="drawing-tools panel"><div><p className="eyebrow">шаг {drawingPhase === "trace" ? 1 : drawingPhase === "color" ? 2 : 3} из 3</p><h3>{drawingPhase === "trace" ? "Обведите контур" : drawingPhase === "color" ? "Выберите цвет" : drawingPhase === "stamp" ? "Украсьте картину" : "Готово!"}</h3></div>{drawingPhase === "trace" && <div className="drawing-step-controls"><p>Не обязательно попадать идеально — главное провести линии по всему рисунку.</p><div><button type="button" className="secondary-button" onClick={clearDrawingCanvas}>Очистить</button><button type="button" className="primary-button" disabled={drawingProgress < 70} onClick={() => { setDrawingPhase("color"); setDrawingFeedback("Выберите любимый оттенок Анны"); }}>Контур готов</button></div></div>}{drawingPhase === "color" && <div className="color-palette" aria-label="Цвета картины">{DRAWING_COLORS.map((color) => <button type="button" className={drawingColor === color.id ? "color-selected" : ""} key={color.id} onClick={() => setDrawingColor(color.id)}><span style={{ background: color.value }} /><small>{color.name}</small></button>)}<button type="button" className="primary-button palette-next" onClick={() => { setDrawingPhase("stamp"); setDrawingFeedback("Осталось выбрать украшение"); }}>Цвет выбран</button></div>}{drawingPhase === "stamp" && <div className="stamp-palette" aria-label="Декоративные штампы">{DRAWING_STAMPS.map((stamp) => <button type="button" className={drawingStamp === stamp.symbol ? "stamp-selected" : ""} key={stamp.name} onClick={() => setDrawingStamp(stamp.symbol)}><span>{stamp.symbol}</span><small>{stamp.name}</small></button>)}<button type="button" className="primary-button stamp-finish" disabled={!drawingStamp} onClick={finishDrawingGame}>Закончить картину</button></div>}<div className="drawing-reward"><span>✦</span><div><strong>Награда за картину</strong><small>140 очков · 8 монет · скука исчезнет</small></div></div></aside></div></section>;
 
   return <main className="game-shell">{header}<section className={`studio-window studio-window-${screen}`} aria-label="Главное окно игры">{screen === "home" && homeScreen}{screen === "match3" && matchScreen}{screen === "drawing" && drawingScreen}</section></main>;
 }

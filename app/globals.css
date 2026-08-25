@@ -1076,6 +1076,9 @@ h1 {
 .inspiration-card button:disabled { color: var(--muted); background: rgba(99, 72, 59, 0.1); cursor: default; }
 .inspiration-ready { border-color: rgba(47, 119, 115, 0.34); box-shadow: 0 16px 38px rgba(47, 119, 115, 0.14); }
 .inspiration-ready button { animation: gentle-pulse 1.5s infinite; }
+.atelier-gallery { display: flex; gap: 6px; margin-top: 10px; }
+.atelier-gallery span { display: block; width: 34px; aspect-ratio: 1; border: 3px solid #8a684e; border-radius: 5px; background: #fffdf2 center / cover no-repeat; box-shadow: 0 3px 7px rgba(69, 42, 31, 0.2); transform: rotate(-2deg); }
+.atelier-gallery span:nth-child(even) { transform: rotate(2deg); }
 
 .home-note { display: flex; align-items: center; gap: 13px; padding: 17px 20px; }
 .home-note > span { color: var(--rose); font-size: 24px; }
@@ -1200,30 +1203,55 @@ h1 {
 .sketch-page { min-height: 530px; padding: 36px; border: 1px solid rgba(113, 83, 61, 0.18); border-radius: 8px 24px 18px 9px; background: linear-gradient(rgba(174, 131, 95, 0.08) 1px, transparent 1px) 0 0 / 100% 30px, #fffdf2; box-shadow: 0 12px 28px rgba(79, 51, 37, 0.12); }
 .sketch-page h3 { margin: 6px 0 8px; font-size: 27px; }
 .sketch-page > p:not(.eyebrow) { max-width: 500px; color: var(--muted); font-size: 11px; line-height: 1.55; }
-.drawing-pattern { display: grid; margin: 26px 0; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-.drawing-pattern > div { position: relative; display: grid; aspect-ratio: 1; place-items: center; border: 2px dashed rgba(143, 68, 76, 0.23); border-radius: 18px; color: rgba(143, 68, 76, 0.35); background: rgba(247, 234, 216, 0.68); }
-.drawing-pattern span { font-size: clamp(28px, 4vw, 48px); }
-.drawing-pattern small { position: absolute; right: 8px; bottom: 6px; font-size: 8px; }
-.drawing-pattern .pattern-current { border-color: var(--gold); color: var(--gold); box-shadow: 0 0 0 4px rgba(221, 168, 75, 0.13); }
-.drawing-pattern .pattern-done { border-style: solid; border-color: rgba(47, 119, 115, 0.32); color: var(--teal); background: #e7f1eb; }
-.sketch-result { display: grid; align-items: center; grid-template-columns: 0.75fr 1fr; gap: 24px; }
-.sketch-result > p { color: var(--rose-dark); font: italic 15px/1.5 Georgia, serif; }
-.sketch-dress { display: grid; min-height: 190px; place-items: center; clip-path: polygon(35% 0, 65% 0, 73% 25%, 100% 100%, 0 100%, 27% 25%); color: var(--rose-dark); background: repeating-linear-gradient(100deg, #f2c9bd 0 20px, #e9b9ad 20px 24px); }
-.sketch-dress span { max-width: 145px; text-align: center; font-size: 27px; line-height: 1.6; }
+.sketch-title-row { display: flex; align-items: end; justify-content: space-between; gap: 20px; }
+.sketch-title-row .eyebrow { margin: 0; }
+.drawing-progress { overflow: hidden; width: min(180px, 42%); height: 9px; margin-bottom: 11px; border-radius: 999px; background: rgba(99, 72, 59, 0.12); }
+.drawing-progress span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--rose), var(--gold)); transition: width 120ms ease; }
+.trace-board { --drawing-color: #b85f69; position: relative; overflow: hidden; width: min(100%, 430px); margin: 18px auto 12px; aspect-ratio: 1; border: 1px solid rgba(113, 83, 61, 0.18); border-radius: 18px; background: #fffdf3; box-shadow: inset 0 0 34px rgba(174, 131, 95, 0.08); }
+.trace-color-rose { --drawing-color: #b85f69; }
+.trace-color-teal { --drawing-color: #3f817c; }
+.trace-color-gold { --drawing-color: #d29a3c; }
+.trace-color-violet { --drawing-color: #796383; }
+.trace-reference,
+.trace-tint,
+.stamp-preview,
+.trace-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.trace-reference { background: center / contain no-repeat; opacity: 0.38; filter: sepia(0.22); }
+.trace-tint { z-index: 1; background: var(--drawing-color); mix-blend-mode: multiply; opacity: 0.11; pointer-events: none; transition: background 180ms ease; }
+.trace-canvas { z-index: 3; touch-action: none; cursor: crosshair; }
+.stamp-preview { z-index: 2; pointer-events: none; }
+.stamp-preview span { position: absolute; color: var(--drawing-color); font: 36px/1 Georgia, serif; text-shadow: 0 2px 0 rgba(255, 255, 255, 0.72); animation: celebration-pop 250ms ease both; }
+.stamp-preview span:nth-child(1) { top: 16%; left: 18%; transform: rotate(-12deg); }
+.stamp-preview span:nth-child(2) { top: 23%; right: 15%; transform: rotate(11deg) scale(0.82); }
+.stamp-preview span:nth-child(3) { right: 20%; bottom: 14%; transform: rotate(-6deg) scale(0.72); }
+.trace-complete { border-color: rgba(47, 119, 115, 0.5); box-shadow: 0 0 0 5px rgba(47, 119, 115, 0.1), inset 0 0 34px rgba(174, 131, 95, 0.08); }
+.drawing-feedback { display: flex; min-height: 42px; align-items: center; justify-content: center; gap: 10px; color: var(--rose-dark); text-align: center; }
+.drawing-feedback > span { display: grid; width: 30px; height: 30px; flex: 0 0 auto; place-items: center; border-radius: 50%; color: #fff; background: var(--rose); }
+.drawing-feedback p { font: italic 13px/1.45 Georgia, serif; }
 
 .drawing-tools { padding: 27px; }
 .drawing-tools h3 { margin-top: 6px; font-size: 24px; }
-.motif-grid { display: grid; margin: 22px 0; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-.drawing-motif { display: grid; min-height: 112px; place-items: center; align-content: center; gap: 6px; border: 1px solid rgba(91, 58, 48, 0.12); border-radius: 18px; color: var(--ink); background: var(--motif-bg); cursor: pointer; transition: transform 150ms ease, box-shadow 150ms ease; }
-.drawing-motif:hover:not(:disabled) { transform: translateY(-3px); box-shadow: 0 9px 18px rgba(77, 45, 34, 0.13); }
-.drawing-motif span { color: var(--motif-color); font: 38px/1 Georgia, serif; }
-.drawing-motif small { color: var(--muted); font-size: 8px; font-weight: 800; text-transform: uppercase; }
-.motif-rose { --motif-bg: #f5dedc; --motif-color: #a94f5a; }
-.motif-teal { --motif-bg: #e1eee8; --motif-color: #2f7773; }
-.motif-coral { --motif-bg: #f6e4d9; --motif-color: #c36d64; }
-.motif-gold { --motif-bg: #f7ebca; --motif-color: #bf8b32; }
-.motif-blue { --motif-bg: #e2ecec; --motif-color: #447e84; }
-.motif-violet { --motif-bg: #ece3ef; --motif-color: #856393; }
+.drawing-step-controls { display: grid; min-height: 340px; align-content: center; gap: 22px; }
+.drawing-step-controls > p { color: var(--muted); font-size: 11px; line-height: 1.65; }
+.drawing-step-controls > div { display: grid; grid-template-columns: 0.75fr 1.25fr; gap: 9px; }
+.drawing-step-controls button,
+.palette-next,
+.stamp-finish { min-height: 48px; }
+.color-palette { display: grid; min-height: 340px; align-content: center; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.color-palette > button:not(.palette-next),
+.stamp-palette > button:not(.stamp-finish) { display: grid; min-height: 92px; place-items: center; align-content: center; gap: 7px; border: 1px solid rgba(91, 58, 48, 0.12); border-radius: 18px; color: var(--ink); background: #fffaf1; cursor: pointer; transition: transform 150ms ease, box-shadow 150ms ease; }
+.color-palette > button:not(.palette-next):hover,
+.stamp-palette > button:not(.stamp-finish):hover { transform: translateY(-2px); }
+.color-palette button > span { display: block; width: 37px; height: 37px; border: 4px solid #fff; border-radius: 50%; box-shadow: 0 0 0 1px rgba(91, 58, 48, 0.16); }
+.color-palette small,
+.stamp-palette small { color: var(--muted); font-size: 8px; font-weight: 800; text-transform: uppercase; }
+.color-palette .color-selected,
+.stamp-palette .stamp-selected { border-color: var(--rose); box-shadow: 0 0 0 3px rgba(183, 95, 101, 0.13); }
+.palette-next,
+.stamp-finish { grid-column: 1 / -1; }
+.stamp-palette { display: grid; min-height: 340px; align-content: center; grid-template-columns: repeat(3, 1fr); gap: 9px; }
+.stamp-palette > button:not(.stamp-finish) { min-height: 105px; }
+.stamp-palette button > span { color: var(--rose-dark); font: 34px/1 Georgia, serif; }
 .drawing-reward { display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 15px; color: var(--teal); background: #e6f0eb; }
 .drawing-reward > span { font-size: 20px; }
 .drawing-reward strong, .drawing-reward small { display: block; }
@@ -1321,10 +1349,9 @@ h1 {
   .order-brief-stack { grid-template-columns: 1fr 0.75fr; }
   .sketchbook { min-height: 520px; }
   .sketch-page { min-height: 460px; }
-  .drawing-tools { display: grid; grid-template-columns: 0.55fr 1fr; gap: 20px; }
-  .drawing-tools .drawing-reward { grid-column: 1 / -1; }
-  .motif-grid { margin: 0; grid-template-columns: repeat(3, 1fr); }
-  .drawing-motif { min-height: 90px; }
+  .drawing-step-controls,
+  .color-palette,
+  .stamp-palette { min-height: 230px; }
 }
 
 @media (max-width: 760px) {
@@ -1432,10 +1459,9 @@ h1 {
   .order-brief-stack { grid-template-columns: 1fr; }
   .match-task-copy { grid-template-columns: 1fr; gap: 4px; }
   .orders-page { padding: 22px 16px; }
-  .drawing-tools { display: block; }
-  .motif-grid { margin: 18px 0; grid-template-columns: repeat(3, 1fr); }
   .sketchbook { min-height: 0; padding: 22px 15px 22px 40px; }
   .sketch-page { min-height: 430px; padding: 24px 17px; }
+  .trace-board { width: min(100%, 390px); }
 }
 
 @media (max-width: 470px) {
@@ -1509,11 +1535,15 @@ h1 {
   .orders-header { align-items: flex-start; }
   .orders-list-card { align-items: start; grid-template-columns: auto 1fr; }
   .orders-list-card > button { grid-column: 1 / -1; width: 100%; }
-  .drawing-pattern { gap: 5px; }
-  .drawing-pattern > div { border-radius: 12px; }
-  .sketch-result { grid-template-columns: 1fr; }
-  .sketch-dress { min-height: 160px; }
-  .motif-grid { grid-template-columns: repeat(2, 1fr); }
+  .sketch-title-row { align-items: start; flex-direction: column; gap: 0; }
+  .drawing-progress { width: 100%; margin: 3px 0 9px; }
+  .trace-board { margin-top: 12px; }
+  .drawing-feedback { align-items: flex-start; text-align: left; }
+  .drawing-tools { padding: 22px 17px; }
+  .drawing-step-controls,
+  .color-palette,
+  .stamp-palette { min-height: 210px; }
+  .stamp-palette > button:not(.stamp-finish) { min-height: 86px; }
   .order-modal { padding: 36px 22px 24px; }
   .order-modal h2 { max-width: 75%; font-size: 28px; }
   .letter-stamp { top: 40px; right: 28px; width: 44px; height: 52px; }
