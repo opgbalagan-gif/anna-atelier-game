@@ -123,6 +123,10 @@ h1 {
   gap: 10px;
 }
 
+.mobile-player-panel {
+  display: none;
+}
+
 .stat-chip,
 .level-chip {
   height: 54px;
@@ -1263,18 +1267,37 @@ h1 {
 @media (max-width: 760px) {
   .game-shell {
     width: min(560px, calc(100% - 20px));
-    padding-top: 13px;
+    padding: 9px 0 calc(96px + env(safe-area-inset-bottom));
   }
 
   .topbar {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 15px;
-    padding: 8px 4px;
+    min-height: 62px;
+    margin-bottom: 10px;
+    padding: 4px;
   }
 
-  .topbar-stats {
+  .topbar > .topbar-stats {
+    display: none;
+  }
+
+  .topbar .eyebrow {
+    display: none;
+  }
+
+  .mobile-player-panel {
+    display: block;
+  }
+
+  .mobile-player-panel .topbar-stats {
+    display: grid;
     width: 100%;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .mobile-player-panel .level-chip {
+    width: 100%;
+    grid-column: 1 / -1;
   }
 
   .stat-chip {
@@ -1340,7 +1363,7 @@ h1 {
     padding: 20px 13px 13px;
   }
 
-  .app-nav { position: sticky; z-index: 20; top: 8px; width: 100%; margin: 0 0 15px; justify-content: center; }
+  .app-nav { position: fixed; z-index: 80; top: auto; right: auto; bottom: max(10px, env(safe-area-inset-bottom)); left: 50%; width: min(540px, calc(100% - 24px)); margin: 0; justify-content: center; background: rgba(255, 250, 242, 0.94); box-shadow: 0 12px 38px rgba(60, 39, 33, 0.22); transform: translateX(-50%); }
   .app-nav button { flex: 1; justify-content: center; padding: 0 8px; }
   .home-sidebar { grid-template-columns: 1fr; }
   .home-action-card { min-height: 0; grid-row: auto; }
@@ -1416,8 +1439,8 @@ h1 {
     flex-direction: column;
   }
 
-  .app-nav { overflow-x: auto; justify-content: flex-start; }
-  .app-nav button { min-width: 82px; flex: 0 0 auto; flex-direction: column; gap: 1px; font-size: 8px; }
+  .app-nav { overflow-x: auto; justify-content: center; }
+  .app-nav button { min-width: 0; flex: 1 1 0; flex-direction: column; gap: 1px; font-size: 8px; }
   .app-nav button span { font-size: 14px; }
   .home-action-card { padding: 21px 17px; }
   .letter-preview { padding: 25px 19px 18px; }

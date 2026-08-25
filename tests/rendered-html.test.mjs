@@ -50,6 +50,16 @@ test("switches Anna states without static pictures", async () => {
   assert.match(game, /<video[^>]+autoPlay[^>]+preload="auto"/);
 });
 
+test("keeps only the title above Anna on mobile", async () => {
+  const game = await readFile(new URL("../app/Game.tsx", import.meta.url), "utf8");
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  assert.match(game, /Ателье Анны/);
+  assert.match(game, /mobile-player-panel/);
+  assert.match(css, /\.topbar > \.topbar-stats\s*\{\s*display: none/);
+  assert.match(css, /\.mobile-player-panel\s*\{\s*display: block/);
+  assert.match(css, /\.app-nav\s*\{[^}]*position: fixed[^}]*bottom:/);
+});
+
 test("unlocks drawing when Anna is bored", async () => {
   const game = await readFile(new URL("../app/Game.tsx", import.meta.url), "utf8");
   assert.match(game, /DRAWING_UNLOCK_AT = 100/);
