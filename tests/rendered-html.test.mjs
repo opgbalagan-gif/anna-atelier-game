@@ -125,7 +125,7 @@ test("supports swipe controls on the match-three board", async () => {
 test("keeps the mobile match-three game on one screen", async () => {
   const game = await readFile(new URL("../app/Game.tsx", import.meta.url), "utf8");
   const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
-  assert.match(game, /screen === "match3" \? "topbar topbar-match-hidden"/);
+  assert.match(game, /screen === "home" \? "topbar" : "topbar topbar-match-hidden"/);
   assert.match(game, /game-shell game-shell-\$\{screen\}/);
   assert.match(css, /\.topbar\.topbar-match-hidden\s*\{\s*display: none/);
   assert.match(css, /\.game-shell-match3\s*\{[^}]*height: 100dvh;[^}]*overflow: hidden/);
@@ -144,10 +144,23 @@ test("unlocks drawing when Anna is bored", async () => {
   assert.match(game, /Контур готов/);
   assert.match(game, /Выберите цвет/);
   assert.match(game, /Украсьте картину/);
+  assert.match(game, /function paintDrawingZone/);
+  assert.match(game, /onPointerUp=\{paintDrawingZone\}/);
+  assert.match(game, /Раскрасьте элементы/);
+  assert.match(game, /paintedZones\.length === 0/);
   assert.match(game, /setBoredom\(5\)/);
   assert.match(css, /\.trace-canvas\s*\{[^}]*touch-action: none/);
+  assert.match(css, /\.coloring-canvas\s*\{[^}]*touch-action: manipulation/);
   assert.doesNotMatch(game, /DRAWING_PATTERN|chooseDrawing/);
   assert.doesNotMatch(game, /болез|illness|sick/i);
+});
+
+test("keeps the mobile drawing game on one screen", async () => {
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  assert.match(css, /\.game-shell-drawing\s*\{[^}]*height: 100dvh;[^}]*overflow: hidden/);
+  assert.match(css, /\.game-shell-drawing \.drawing-layout\s*\{[^}]*grid-template-rows: minmax\(0, 1fr\) auto/);
+  assert.match(css, /\.game-shell-drawing \.sketch-page\s*\{[^}]*grid-template-rows: auto auto minmax\(0, 1fr\) auto/);
+  assert.match(css, /\.game-shell-drawing \.drawing-reward\s*\{\s*display: none/);
 });
 
 test("ships generated tracing pictures for the drawing game", async () => {

@@ -165,12 +165,15 @@ export default function Game() {
   const soundEnabledRef = useRef(false);
   const audioContextRef = useRef<AudioContext | null>(null);
   const drawingCanvas = useRef<HTMLCanvasElement | null>(null);
+  const coloringCanvas = useRef<HTMLCanvasElement | null>(null);
+  const coloringSource = useRef<ImageData | null>(null);
   const drawingPointer = useRef<{ pointerId: number; x: number; y: number } | null>(null);
   const drawingDistance = useRef(0);
   const [drawingSketchIndex, setDrawingSketchIndex] = useState(0);
   const [drawingPhase, setDrawingPhase] = useState<DrawingPhase>("trace");
   const [drawingProgress, setDrawingProgress] = useState(0);
   const [drawingColor, setDrawingColor] = useState<DrawingColor>("rose");
+  const [paintedZones, setPaintedZones] = useState<string[]>([]);
   const [drawingStamp, setDrawingStamp] = useState<string | null>(null);
   const [drawingFeedback, setDrawingFeedback] = useState("Начните вести карандаш по контуру");
   const [completedSketches, setCompletedSketches] = useState<number[]>([]);
@@ -318,6 +321,26 @@ export default function Game() {
     }, 1500);
     return () => window.clearTimeout(transition);
   }, [playSound, showOrderReadyMessage]);
+
+  useEffect(() => {
+    if (screen !== "drawing" || drawingPhase !== "color") return;
+    const canvas = coloringCanvas.current;
+    if (!canvas) return;
+    const image = new Image();
+    image.decoding = "async";
+    image.onload = () => {
+      const size = 640;
+      canvas.width = size;
+      canvas.height = size;
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      if (!context) return;
+      context.clearRect(0, 0, size, size);
+      context.drawImage(image, 0, 0, size, size);
+      coloringSource.current = context.getImageData(0, 0, size, size);
+    };
+    image.src = assetPath(DRAWING_SKETCHES[drawingSketchIndex].asset);
+    return () => { image.onload = null; };
+  }, [drawingPhase, drawingSketchIndex, screen]);
 
   function acceptOrder() {
     if (!hasAvailableOrder) return;
@@ -497,8 +520,118 @@ export default function Game() {
     }
     drawingPointer.current = null;
     drawingDistance.current = 0;
+    coloringSource.current = null;
+    setPaintedZones([]);
     setDrawingProgress(0);
     setDrawingFeedback("Начните вести карандаш по контуру");
+  }
+
+  function startColoring() {
+    playSound("tap");
+    setPaintedZones([]);
+    setDrawingPhase("color");
+    setDrawingFeedback("Выберите цвет и нажмите на часть рисунка");
+  }
+
+  function selectDrawingColor(color: DrawingColor, name: string) {
+    playSound("tap");
+    setDrawingColor(color);
+    setDrawingFeedback(`Цвет «${name}» выбран — нажмите на элемент`);
+  }
+
+  function paintDrawingZone(event: ReactPointerEvent<HTMLCanvasElement>) {
+    if (drawingPhase !== "color") return;
+    const canvas = event.currentTarget;
+    const source = coloringSource.current;
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    if (!source || !context || !canvas.width || !canvas.height) return;
+
+    const bounds = canvas.getBoundingClientRect();
+    const rawX = Math.floor((event.clientX - bounds.left) * canvas.width / bounds.width);
+    const rawY = Math.floor((event.clientY - bounds.top) * canvas.height / bounds.height);
+    const startX = Math.max(0, Math.min(canvas.width - 1, rawX));
+    const startY = Math.max(0, Math.min(canvas.height - 1, rawY));
+    const total = canvas.width * canvas.height;
+    const sourcePixels = source.data;
+    const isPaintable = (index: number) => {
+      const offset = index * 4;
+      const luminance = sourcePixels[offset] * 0.299 + sourcePixels[offset + 1] * 0.587 + sourcePixels[offset + 2] * 0.114;
+      return sourcePixels[offset + 3] > 0 && luminance > 176;
+    };
+
+    let startIndex = startY * canvas.width + startX;
+    if (!isPaintable(startIndex)) {
+      let nearest = -1;
+      for (let radius = 1; radius <= 18 && nearest < 0; radius += 1) {
+        for (let offsetY = -radius; offsetY <= radius && nearest < 0; offsetY += 1) {
+          for (let offsetX = -radius; offsetX <= radius; offsetX += 1) {
+            if (Math.abs(offsetX) !== radius && Math.abs(offsetY) !== radius) continue;
+            const x = startX + offsetX;
+            const y = startY + offsetY;
+            if (x < 0 || y < 0 || x >= canvas.width || y >= canvas.height) continue;
+            const candidate = y * canvas.width + x;
+            if (isPaintable(candidate)) { nearest = candidate; break; }
+          }
+        }
+      }
+      if (nearest < 0) {
+        playSound("fail");
+        setDrawingFeedback("Нажмите внутри светлой области рисунка");
+        return;
+      }
+      startIndex = nearest;
+    }
+
+    const visited = new Uint8Array(total);
+    const queue = new Int32Array(total);
+    const region: number[] = [];
+    let head = 0;
+    let tail = 0;
+    let regionKey = startIndex;
+    queue[tail] = startIndex;
+    tail += 1;
+    visited[startIndex] = 1;
+
+    while (head < tail) {
+      const index = queue[head];
+      head += 1;
+      region.push(index);
+      if (index < regionKey) regionKey = index;
+      const x = index % canvas.width;
+      const candidates = [index - canvas.width, index + canvas.width];
+      if (x > 0) candidates.push(index - 1);
+      if (x < canvas.width - 1) candidates.push(index + 1);
+      candidates.forEach((candidate) => {
+        if (candidate < 0 || candidate >= total || visited[candidate] || !isPaintable(candidate)) return;
+        visited[candidate] = 1;
+        queue[tail] = candidate;
+        tail += 1;
+      });
+    }
+
+    if (region.length < 48) {
+      playSound("fail");
+      setDrawingFeedback("Выберите более крупную часть рисунка");
+      return;
+    }
+
+    const palette = DRAWING_COLORS.find((color) => color.id === drawingColor) ?? DRAWING_COLORS[0];
+    const red = Number.parseInt(palette.value.slice(1, 3), 16);
+    const green = Number.parseInt(palette.value.slice(3, 5), 16);
+    const blue = Number.parseInt(palette.value.slice(5, 7), 16);
+    const painted = context.getImageData(0, 0, canvas.width, canvas.height);
+    region.forEach((index) => {
+      const offset = index * 4;
+      painted.data[offset] = Math.round(red * 0.68 + sourcePixels[offset] * 0.32);
+      painted.data[offset + 1] = Math.round(green * 0.68 + sourcePixels[offset + 1] * 0.32);
+      painted.data[offset + 2] = Math.round(blue * 0.68 + sourcePixels[offset + 2] * 0.32);
+    });
+    context.putImageData(painted, 0, 0);
+    const zoneId = String(regionKey);
+    const isNewZone = !paintedZones.includes(zoneId);
+    setPaintedZones((zones) => zones.includes(zoneId) ? zones : [...zones, zoneId]);
+    playSound("tap");
+    setDrawingFeedback(isNewZone ? "Зона окрашена — выберите следующую или смените цвет" : "Зона перекрашена новым оттенком");
   }
 
   function finishDrawingGame() {
@@ -524,7 +657,7 @@ export default function Game() {
 
   const atelierHud = <div className="atelier-hud" aria-label={`Уровень ${level}, монет: ${coins}`}><span className="atelier-level"><small>Уровень</small><strong>{level}</strong></span><span className="atelier-hud-divider" aria-hidden="true" /><span className="atelier-coins"><b aria-hidden="true">●</b><strong>{coins}</strong><small>монет</small></span></div>;
 
-  const header = <header className={screen === "match3" ? "topbar topbar-match-hidden" : "topbar"}><div className="brand-lockup"><div className="brand-mark" aria-hidden="true">А</div><div><p className="eyebrow">уютная история мастерской</p><h1>Ателье Анны</h1></div></div></header>;
+  const header = <header className={screen === "home" ? "topbar" : "topbar topbar-match-hidden"}><div className="brand-lockup"><div className="brand-mark" aria-hidden="true">А</div><div><p className="eyebrow">уютная история мастерской</p><h1>Ателье Анны</h1></div></div></header>;
 
   const orderInboxCard = showOrderModal && !activeOrder && hasAvailableOrder ? <section className="order-modal order-inbox-card" role="dialog" aria-modal="false" aria-labelledby="new-order-title"><button type="button" className="modal-close" aria-label="Закрыть письмо" onClick={() => setShowOrderModal(false)}>×</button><div className="letter-stamp" aria-hidden="true">✿</div><p className="eyebrow">новый заказ</p><h2 id="new-order-title">{order.title}</h2><div className="modal-client"><span>{order.client.slice(0, 1)}</span><div><small>Пишет</small><strong>{order.client}</strong></div></div><p className="order-letter">«{order.note}. Очень надеюсь на ваше мастерство, Анна!»</p><div className="modal-order-details"><div><span>Материал</span><strong>{TILE_TYPES[order.tile].short} · {order.goal}</strong></div><div><span>Срок</span><strong>{order.time}</strong></div><div><span>Награда</span><strong>{order.reward} ●</strong></div></div><div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setShowOrderModal(false)}>Не сейчас</button><button type="button" className="primary-button" onClick={acceptOrder}>Принять заказ</button></div></section> : null;
 
@@ -535,7 +668,41 @@ export default function Game() {
   const matchScreen = activeOrder ? <section className="screen-enter embedded-game" aria-label="Игра три в ряд"><div className="match-layout"><section id="match-board" className="board-panel panel" aria-label="Поле три в ряд"><div className="section-heading board-heading"><div className="mode-title-row"><button type="button" className="inline-back-button" aria-label="Вернуться к Анне" onClick={() => setScreen("home")}>←</button><div><p className="eyebrow">игра в основном окне</p><h2>Соберите материалы</h2></div></div><div className={`moves-badge${moves <= 5 ? " moves-low" : ""}`}><strong>{moves}</strong><span>ходов</span></div></div><div className={`match-board${busy ? " board-busy" : ""}`} role="grid" aria-label="Игровое поле 7 на 7">{board.map((type, index) => <button className={`tile tile-type-${type}${selected === index ? " tile-selected" : ""}${matched.has(index) ? " tile-matched" : ""}`} key={index} type="button" role="gridcell" aria-label={`${TILE_TYPES[type].name}, ряд ${Math.floor(index / BOARD_SIZE) + 1}, столбец ${(index % BOARD_SIZE) + 1}`} aria-selected={selected === index} onClick={() => selectTile(index)} onPointerDown={(event) => beginSwipe(index, event)} onPointerUp={endSwipe} onPointerCancel={cancelSwipe} disabled={busy || orderReady}><TileSprite type={type} /></button>)}</div>{showOrderReadyMessage && <div className="order-ready-overlay" role="status" aria-live="assertive"><span>✓</span><strong>Заказ готов!</strong><small>Сейчас Анна порадуется своей работе</small></div>}<div className="board-footer"><p aria-live="polite"><span>✦</span>{toast}</p><button type="button" className="text-button" onClick={startNewDay}>Новый день</button></div></section><aside className="order-brief-stack"><section className={`match-task-card panel${orderReady ? " order-ready" : ""}`}><div className="order-topline"><span>Задание заказа</span><b>{order.time}</b></div><div className="match-task-copy"><div className="client-row"><div className="client-avatar">{order.client.slice(0, 1)}</div><div><small>Клиент</small><strong>{order.client}</strong></div></div><div><h2>{order.title}</h2><p>{order.note}</p></div></div><div className="task-strip"><TileSprite type={order.tile} small /><div><span>Нужно собрать</span><strong>{TILE_TYPES[order.tile].short}</strong></div><div className="mini-progress"><span style={{ width: `${(orderProgress / order.goal) * 100}%` }} /></div><b>{orderProgress}/{order.goal}</b></div></section><div className="tip-card"><span>⌁</span><p><strong>Как играть</strong>Смахивайте фишки к соседним клеткам и собирайте ряды от трёх.</p></div></aside></div></section> : homeScreen;
 
   const activeSketch = DRAWING_SKETCHES[drawingSketchIndex];
-  const drawingScreen = <section className="drawing-page screen-enter embedded-game" aria-label="Игра с рисованием"><div className="drawing-layout"><section className="sketchbook panel"><div className="mode-heading mode-heading-with-back"><button type="button" className="inline-back-button" aria-label="Вернуться к Анне" onClick={() => setScreen("home")}>←</button><div><p className="eyebrow">игра в основном окне · альбом вдохновения</p><h2>Картина Анны</h2></div></div><div className="sketchbook-binding" aria-hidden="true">{Array.from({ length: 9 }, (_, index) => <i key={index} />)}</div><div className="sketch-page"><div className="sketch-title-row"><div><p className="eyebrow">эскиз {drawingSketchIndex + 1} из {DRAWING_SKETCHES.length}</p><h3>{activeSketch.name}</h3></div><div className="drawing-progress" aria-label={`Контур готов на ${drawingProgress}%`}><span style={{ width: `${drawingProgress}%` }} /></div></div><p>{drawingPhase === "trace" ? activeSketch.instruction : drawingPhase === "color" ? "Выберите цвет для картины." : drawingPhase === "stamp" ? "Добавьте последний декоративный штамп." : "Картина отправляется в галерею Анны."}</p><div className={`trace-board trace-color-${drawingColor}${drawingPhase === "done" ? " trace-complete" : ""}`}><div className="trace-reference" style={{ backgroundImage: `url("${assetPath(activeSketch.asset)}")` }} aria-hidden="true" /><div className="trace-tint" aria-hidden="true" />{drawingStamp && <div className="stamp-preview" aria-hidden="true"><span>{drawingStamp}</span><span>{drawingStamp}</span><span>{drawingStamp}</span></div>}<canvas ref={drawingCanvas} className="trace-canvas" aria-label={`Обведите рисунок «${activeSketch.name}» пальцем`} onPointerDown={beginSketchLine} onPointerMove={continueSketchLine} onPointerUp={endSketchLine} onPointerCancel={endSketchLine} /></div><div className="drawing-feedback" aria-live="polite"><span>{drawingPhase === "done" ? "✓" : "✎"}</span><p>{drawingFeedback}</p></div></div></section><aside className="drawing-tools panel"><div><p className="eyebrow">шаг {drawingPhase === "trace" ? 1 : drawingPhase === "color" ? 2 : 3} из 3</p><h3>{drawingPhase === "trace" ? "Обведите контур" : drawingPhase === "color" ? "Выберите цвет" : drawingPhase === "stamp" ? "Украсьте картину" : "Готово!"}</h3></div>{drawingPhase === "trace" && <div className="drawing-step-controls"><p>Не обязательно попадать идеально — главное провести линии по всему рисунку.</p><div><button type="button" className="secondary-button" onClick={clearDrawingCanvas}>Очистить</button><button type="button" className="primary-button" disabled={drawingProgress < 70} onClick={() => { setDrawingPhase("color"); setDrawingFeedback("Выберите любимый оттенок Анны"); }}>Контур готов</button></div></div>}{drawingPhase === "color" && <div className="color-palette" aria-label="Цвета картины">{DRAWING_COLORS.map((color) => <button type="button" className={drawingColor === color.id ? "color-selected" : ""} key={color.id} onClick={() => setDrawingColor(color.id)}><span style={{ background: color.value }} /><small>{color.name}</small></button>)}<button type="button" className="primary-button palette-next" onClick={() => { setDrawingPhase("stamp"); setDrawingFeedback("Осталось выбрать украшение"); }}>Цвет выбран</button></div>}{drawingPhase === "stamp" && <div className="stamp-palette" aria-label="Декоративные штампы">{DRAWING_STAMPS.map((stamp) => <button type="button" className={drawingStamp === stamp.symbol ? "stamp-selected" : ""} key={stamp.name} onClick={() => setDrawingStamp(stamp.symbol)}><span>{stamp.symbol}</span><small>{stamp.name}</small></button>)}<button type="button" className="primary-button stamp-finish" disabled={!drawingStamp} onClick={finishDrawingGame}>Закончить картину</button></div>}<div className="drawing-reward"><span>✦</span><div><strong>Награда за картину</strong><small>140 очков · 8 монет · скука исчезнет</small></div></div></aside></div></section>;
+  const drawingStepProgress = drawingPhase === "trace" ? Math.min(48, drawingProgress * 0.68) : drawingPhase === "color" ? 58 + Math.min(22, paintedZones.length * 6) : drawingPhase === "stamp" ? 88 : 100;
+  const drawingScreen = (
+    <section className="drawing-page screen-enter embedded-game" aria-label="Игра с рисованием">
+      <div className="drawing-layout">
+        <section className="sketchbook panel">
+          <div className="mode-heading mode-heading-with-back">
+            <button type="button" className="inline-back-button" aria-label="Вернуться к Анне" onClick={() => setScreen("home")}>←</button>
+            <div><p className="eyebrow">альбом вдохновения</p><h2>Картина Анны</h2></div>
+          </div>
+          <div className="sketchbook-binding" aria-hidden="true">{Array.from({ length: 9 }, (_, index) => <i key={index} />)}</div>
+          <div className="sketch-page">
+            <div className="sketch-title-row">
+              <div><p className="eyebrow">эскиз {drawingSketchIndex + 1} из {DRAWING_SKETCHES.length}</p><h3>{activeSketch.name}</h3></div>
+              <div className="drawing-progress" aria-label={`Картина готова на ${Math.round(drawingStepProgress)}%`}><span style={{ width: `${drawingStepProgress}%` }} /></div>
+            </div>
+            <p>{drawingPhase === "trace" ? activeSketch.instruction : drawingPhase === "color" ? "Выберите цвет и нажимайте на отдельные части рисунка." : drawingPhase === "stamp" ? "Добавьте последний декоративный штамп." : "Картина отправляется в галерею Анны."}</p>
+            <div className={`trace-board trace-color-${drawingColor}${drawingPhase === "done" ? " trace-complete" : ""}`}>
+              <div className={`trace-reference${drawingPhase === "trace" ? "" : " trace-reference-hidden"}`} style={{ backgroundImage: `url("${assetPath(activeSketch.asset)}")` }} aria-hidden="true" />
+              <canvas ref={coloringCanvas} className={`coloring-canvas${drawingPhase === "trace" ? "" : " coloring-canvas-active"}`} aria-label={`Раскрасьте отдельные элементы рисунка «${activeSketch.name}»`} onPointerUp={paintDrawingZone} />
+              {drawingStamp && <div className="stamp-preview" aria-hidden="true"><span>{drawingStamp}</span><span>{drawingStamp}</span><span>{drawingStamp}</span></div>}
+              <canvas ref={drawingCanvas} className={`trace-canvas${drawingPhase === "trace" ? "" : " trace-canvas-inactive"}`} aria-label={`Обведите рисунок «${activeSketch.name}» пальцем`} onPointerDown={beginSketchLine} onPointerMove={continueSketchLine} onPointerUp={endSketchLine} onPointerCancel={endSketchLine} />
+            </div>
+            <div className="drawing-feedback" aria-live="polite"><span>{drawingPhase === "done" ? "✓" : drawingPhase === "color" ? "●" : "✎"}</span><p>{drawingFeedback}</p></div>
+          </div>
+        </section>
+        <aside className="drawing-tools panel">
+          <div className="drawing-tools-heading"><p className="eyebrow">шаг {drawingPhase === "trace" ? 1 : drawingPhase === "color" ? 2 : 3} из 3</p><h3>{drawingPhase === "trace" ? "Обведите контур" : drawingPhase === "color" ? "Раскрасьте элементы" : drawingPhase === "stamp" ? "Украсьте картину" : "Готово!"}</h3></div>
+          {drawingPhase === "trace" && <div className="drawing-step-controls"><p>Проведите линии по рисунку — попадать идеально не обязательно.</p><div><button type="button" className="secondary-button" onClick={clearDrawingCanvas}>Очистить</button><button type="button" className="primary-button" disabled={drawingProgress < 70} onClick={startColoring}>Контур готов</button></div></div>}
+          {drawingPhase === "color" && <div className="color-palette" aria-label="Цвета картины">{DRAWING_COLORS.map((color) => <button type="button" className={drawingColor === color.id ? "color-selected" : ""} key={color.id} aria-label={`Выбрать цвет ${color.name}`} aria-pressed={drawingColor === color.id} onClick={() => selectDrawingColor(color.id, color.name)}><span style={{ background: color.value }} /><small>{color.name}</small></button>)}<button type="button" className="primary-button palette-next" disabled={paintedZones.length === 0} onClick={() => { playSound("tap"); setDrawingPhase("stamp"); setDrawingFeedback("Осталось выбрать украшение"); }}>К украшениям</button></div>}
+          {drawingPhase === "stamp" && <div className="stamp-palette" aria-label="Декоративные штампы">{DRAWING_STAMPS.map((stamp) => <button type="button" className={drawingStamp === stamp.symbol ? "stamp-selected" : ""} key={stamp.name} onClick={() => { playSound("tap"); setDrawingStamp(stamp.symbol); setDrawingFeedback(`Украшение «${stamp.name}» добавлено`); }}><span>{stamp.symbol}</span><small>{stamp.name}</small></button>)}<button type="button" className="primary-button stamp-finish" disabled={!drawingStamp} onClick={finishDrawingGame}>Закончить картину</button></div>}
+          <div className="drawing-reward"><span>✦</span><div><strong>Награда за картину</strong><small>140 очков · 8 монет · скука исчезнет</small></div></div>
+        </aside>
+      </div>
+    </section>
+  );
 
   return <main className={`game-shell game-shell-${screen}`}>{header}<section className={`studio-window studio-window-${screen}`} aria-label="Главное окно игры">{screen === "home" && homeScreen}{screen === "match3" && matchScreen}{screen === "drawing" && drawingScreen}</section></main>;
 }
