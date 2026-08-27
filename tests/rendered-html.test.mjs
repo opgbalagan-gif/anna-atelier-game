@@ -82,14 +82,19 @@ test("switches Anna states without static pictures", async () => {
   assert.match(game, /<video[^>]+autoPlay[^>]+preload="auto"/);
 });
 
-test("keeps the whole tamagotchi interface inside Anna's game field", async () => {
+test("keeps the whole tamagotchi interface compact inside Anna's game field", async () => {
   const game = await readFile(new URL("../app/Game.tsx", import.meta.url), "utf8");
   const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
   assert.match(game, /Ателье Анны/);
-  assert.match(game, /className="stage-player-panel"/);
+  assert.match(game, /className="atelier-hud"/);
+  assert.match(game, /Уровень/);
+  assert.match(game, /монет/);
+  assert.doesNotMatch(game, /className="status-pill"|className="stage-player-panel"/);
   assert.match(game, /className="home-layout home-layout-single screen-enter"/);
-  assert.match(css, /\.home-layout-single \.anna-copy\s*\{[^}]*position: absolute/);
-  assert.match(css, /\.stage-player-panel\s*\{[^}]*position: absolute/);
+  assert.match(css, /\.home-layout-single \.anna-card\s*\{[^}]*grid-template-rows: minmax\(0, 1fr\) auto/);
+  assert.match(css, /\.home-layout-single \.anna-copy\s*\{[^}]*position: relative/);
+  assert.match(css, /\.home-layout-single \.meters\s*\{[^}]*grid-template-columns: repeat\(3/);
+  assert.match(css, /\.atelier-hud\s*\{[^}]*position: absolute/);
   assert.doesNotMatch(game, /mobile-player-panel|home-sidebar|home-action-card|letter-preview|Открыть заказ/);
   assert.doesNotMatch(game, /className="app-nav"/);
   assert.match(game, /className="inline-back-button"/);
@@ -155,4 +160,16 @@ test("keeps each Anna video ready for streaming playback", async () => {
     assert.ok(moovOffset > 0 && mediaOffset > 0, `${filename} contains MP4 playback boxes`);
     assert.ok(moovOffset < mediaOffset, `${filename} stores its playback index before media data`);
   }
+});
+
+test("adds opt-in game sound effects", async () => {
+  const game = await readFile(new URL("../app/Game.tsx", import.meta.url), "utf8");
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  assert.match(game, /\[soundEnabled, setSoundEnabled\] = useState\(false\)/);
+  assert.match(game, /new AudioContextConstructor\(\)/);
+  assert.match(game, /className=\{`sound-toggle/);
+  assert.match(game, /aria-pressed=\{soundEnabled\}/);
+  assert.match(game, /playSound\("success"\)/);
+  assert.match(game, /playSound\("coin"\)/);
+  assert.match(css, /\.sound-toggle\s*\{[^}]*position: absolute/);
 });

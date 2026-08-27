@@ -43,6 +43,7 @@ const DRAWING_STAMPS = [
 
 type DrawingPhase = "trace" | "color" | "stamp" | "done";
 type DrawingColor = (typeof DRAWING_COLORS)[number]["id"];
+type SoundEffect = "tap" | "coin" | "success" | "rest" | "alert" | "fail" | "welcome";
 
 type Board = number[];
 type Screen = "home" | "match3" | "drawing";
@@ -159,6 +160,9 @@ export default function Game() {
   const [boredom, setBoredom] = useState(28);
   const [temporaryState, setTemporaryState] = useState<"eating" | null>(null);
   const [toast, setToast] = useState("В ателье пришёл новый заказ");
+  const [soundEnabled, setSoundEnabled] = useState(false);
+  const soundEnabledRef = useRef(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
   const drawingCanvas = useRef<HTMLCanvasElement | null>(null);
   const drawingPointer = useRef<{ pointerId: number; x: number; y: number } | null>(null);
   const drawingDistance = useRef(0);
@@ -173,8 +177,53 @@ export default function Game() {
   const hasAvailableOrder = orderIndex < ORDERS.length;
   const order = ORDERS[Math.min(orderIndex, ORDERS.length - 1)];
   const drawingUnlocked = boredom >= DRAWING_UNLOCK_AT;
-  const levelProgress = Math.min(100, (score / 1600) * 100);
+  const level = Math.floor(score / 1600) + 1;
   const averageCare = Math.round((hunger + energy + (100 - boredom)) / 3);
+
+  const playSound = useCallback((effect: SoundEffect, force = false) => {
+    if (!force && !soundEnabledRef.current) return;
+    const AudioContextConstructor = window.AudioContext ?? (window as Window & typeof globalThis & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextConstructor) return;
+    const context = audioContextRef.current ?? new AudioContextConstructor();
+    audioContextRef.current = context;
+    const presets: Record<SoundEffect, Array<[frequency: number, delay: number, duration: number]>> = {
+      tap: [[520, 0, 0.06]],
+      coin: [[740, 0, 0.08], [988, 0.07, 0.14]],
+      success: [[523, 0, 0.12], [659, 0.11, 0.12], [784, 0.22, 0.2]],
+      rest: [[392, 0, 0.16], [330, 0.13, 0.2]],
+      alert: [[659, 0, 0.07], [880, 0.08, 0.13]],
+      fail: [[220, 0, 0.12], [164, 0.09, 0.18]],
+      welcome: [[523, 0, 0.08], [784, 0.09, 0.16]],
+    };
+    const schedule = () => {
+      const now = context.currentTime;
+      presets[effect].forEach(([frequency, delay, duration]) => {
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+        const start = now + delay;
+        oscillator.type = effect === "fail" ? "triangle" : "sine";
+        oscillator.frequency.setValueAtTime(frequency, start);
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(effect === "tap" ? 0.025 : 0.045, start + 0.012);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+        oscillator.connect(gain);
+        gain.connect(context.destination);
+        oscillator.start(start);
+        oscillator.stop(start + duration + 0.03);
+        oscillator.addEventListener("ended", () => { oscillator.disconnect(); gain.disconnect(); }, { once: true });
+      });
+    };
+    if (context.state === "suspended") void context.resume().then(schedule).catch(() => undefined);
+    else schedule();
+  }, []);
+
+  function toggleSound() {
+    const next = !soundEnabled;
+    soundEnabledRef.current = next;
+    setSoundEnabled(next);
+    if (next) playSound("welcome", true);
+    else if (audioContextRef.current?.state === "running") void audioContextRef.current.suspend();
+  }
 
   const finishCelebration = useCallback(() => {
     if (!celebrating) return;
@@ -185,7 +234,8 @@ export default function Game() {
     setActiveOrder(false); setOrderReady(false); setOrderProgress(0); setOrderIndex((value) => value + 1);
     setBoredom((value) => Math.max(0, value - 28)); setScreen("home");
     setToast(`Заказ «${finishedTitle}» готов! +${reward} монет`);
-  }, [activeOrder, celebrating, order.reward, order.title, orderReady]);
+    playSound("coin");
+  }, [activeOrder, celebrating, order.reward, order.title, orderReady, playSound]);
 
   const annaState = useMemo(() => {
     if (temporaryState === "eating") return "Анна устроила уютный перекус";
@@ -216,6 +266,11 @@ export default function Game() {
     return () => window.clearInterval(timer);
   }, []);
 
+  useEffect(() => () => {
+    const context = audioContextRef.current;
+    if (context && context.state !== "closed") void context.close();
+  }, []);
+
   useEffect(() => {
     if (!celebrating) return;
     const fallback = window.setTimeout(finishCelebration, 6500);
@@ -227,12 +282,14 @@ export default function Game() {
     const transition = window.setTimeout(() => {
       setShowOrderReadyMessage(false); setCelebrating(true); setScreen("home");
       setToast("Анна радуется готовой работе");
+      playSound("success");
     }, 1500);
     return () => window.clearTimeout(transition);
-  }, [showOrderReadyMessage]);
+  }, [playSound, showOrderReadyMessage]);
 
   function acceptOrder() {
     if (!hasAvailableOrder) return;
+    playSound("tap");
     setActiveOrder(true); setOrderProgress(0); setOrderReady(false); setMoves(STARTING_MOVES);
     setBoard(makeBoard(Date.now() % 100000)); setShowOrderModal(false); setScreen("match3");
     setToast(`Заказ «${order.title}» принят — соберите ${TILE_TYPES[order.tile].short.toLowerCase()}`);
@@ -246,10 +303,12 @@ export default function Game() {
     setOrderProgress(newProgress); setOrderReady(materialsComplete);
     setBoredom((value) => Math.max(0, value - Math.min(14, 4 + combo * 2))); setBusy(false);
     if (materialsComplete) {
+      playSound("success");
       setSelected(null); setMatched(new Set()); setShowOrderReadyMessage(true);
       setToast("Заказ готов!");
       return;
     }
+    playSound("coin");
     setToast(combo > 1 ? `Каскад ×${combo}! +${points} очков` : `Отличный шов! +${points} очков`);
   }
 
@@ -270,6 +329,7 @@ export default function Game() {
     if (moves <= 0) return setToast("Ходы закончились — начните новый день");
     const swapped = [...board]; [swapped[first], swapped[second]] = [swapped[second], swapped[first]]; setSelected(null);
     if (findMatches(swapped).size === 0) {
+      playSound("fail");
       setBoard(swapped); setBusy(true); setToast("Здесь ряд не складывается");
       window.setTimeout(() => { setBoard(board); setBusy(false); }, 280); return;
     }
@@ -322,11 +382,13 @@ export default function Game() {
 
   function careForAnna(kind: "food" | "rest" | "sew") {
     if (kind === "sew") {
+      playSound("tap");
       if (activeOrder && !orderReady) setScreen("match3"); else if (!activeOrder && hasAvailableOrder) setShowOrderModal(true); else if (!activeOrder) setToast("Все заказы на сегодня выполнены");
       return;
     }
     const cost = kind === "food" ? 8 : 6;
-    if (coins < cost) return setToast("Нужно ещё немного монет");
+    if (coins < cost) { playSound("fail"); return setToast("Нужно ещё немного монет"); }
+    playSound(kind === "food" ? "coin" : "rest");
     setCoins((value) => value - cost);
     if (kind === "food") { setHunger((value) => Math.min(100, value + 22)); setTemporaryState("eating"); window.setTimeout(() => setTemporaryState(null), 4200); }
     else setEnergy((value) => Math.min(100, value + 20));
@@ -334,6 +396,7 @@ export default function Game() {
   }
 
   function startNewDay() {
+    playSound("welcome");
     setBoard(makeBoard(Date.now() % 100000)); setSelected(null); setMatched(new Set()); setMoves(STARTING_MOVES); setToast("Новый день в мастерской начался");
   }
 
@@ -408,6 +471,7 @@ export default function Game() {
 
   function finishDrawingGame() {
     if (!drawingStamp || drawingPhase !== "stamp") return;
+    playSound("success");
     const finishedSketch = drawingSketchIndex;
     setDrawingPhase("done");
     setDrawingFeedback("Картина готова! Анна снова полна идей");
@@ -426,13 +490,13 @@ export default function Game() {
     }, 1700);
   }
 
-  const playerStats = <div className="topbar-stats" aria-label="Игровые показатели"><div className="stat-chip"><span>✦</span><strong>{score.toLocaleString("ru-RU")}</strong><small>очки</small></div><div className="stat-chip stat-coin"><span>●</span><strong>{coins}</strong><small>монеты</small></div><div className="level-chip"><div><strong>Уровень 1</strong><span>{Math.round(levelProgress)}%</span></div><div className="level-track"><span style={{ width: `${levelProgress}%` }} /></div></div></div>;
+  const atelierHud = <div className="atelier-hud" aria-label={`Уровень ${level}, монет: ${coins}`}><span className="atelier-level"><small>Уровень</small><strong>{level}</strong></span><span className="atelier-hud-divider" aria-hidden="true" /><span className="atelier-coins"><b aria-hidden="true">●</b><strong>{coins}</strong><small>монет</small></span></div>;
 
   const header = <header className={screen === "match3" ? "topbar topbar-match-hidden" : "topbar"}><div className="brand-lockup"><div className="brand-mark" aria-hidden="true">А</div><div><p className="eyebrow">уютная история мастерской</p><h1>Ателье Анны</h1></div></div></header>;
 
   const orderInboxCard = showOrderModal && !activeOrder && hasAvailableOrder ? <section className="order-modal order-inbox-card" role="dialog" aria-modal="false" aria-labelledby="new-order-title"><button type="button" className="modal-close" aria-label="Закрыть письмо" onClick={() => setShowOrderModal(false)}>×</button><div className="letter-stamp" aria-hidden="true">✿</div><p className="eyebrow">новый заказ</p><h2 id="new-order-title">{order.title}</h2><div className="modal-client"><span>{order.client.slice(0, 1)}</span><div><small>Пишет</small><strong>{order.client}</strong></div></div><p className="order-letter">«{order.note}. Очень надеюсь на ваше мастерство, Анна!»</p><div className="modal-order-details"><div><span>Материал</span><strong>{TILE_TYPES[order.tile].short} · {order.goal}</strong></div><div><span>Срок</span><strong>{order.time}</strong></div><div><span>Награда</span><strong>{order.reward} ●</strong></div></div><div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setShowOrderModal(false)}>Не сейчас</button><button type="button" className="primary-button" onClick={acceptOrder}>Принять заказ</button></div></section> : null;
 
-  const annaCard = <aside className="anna-card panel"><div className="character-stage"><video key={annaVisual.video} className="scene-image" autoPlay loop={!celebrating} muted playsInline preload="auto" aria-label={annaVisual.alt} onEnded={celebrating ? finishCelebration : undefined}><source src={annaVisual.video} type="video/mp4" /></video><div className="stage-glow" /><div className="status-pill"><span>{annaVisual.id === "sewing" ? "✂" : annaVisual.icon}</span><strong>{annaVisual.status}</strong></div><div className="stage-player-panel">{playerStats}</div>{!activeOrder && hasAvailableOrder ? <button type="button" className="mood-bubble order-alert-bubble" aria-label={`Новый заказ: ${order.title}`} aria-expanded={showOrderModal} onClick={() => setShowOrderModal((value) => !value)}><span>✉</span><b>!</b></button> : <span className={`mood-bubble${annaVisual.id !== "sewing" ? " boredom-alert" : ""}`} aria-label={`Состояние Анны: ${annaVisual.status}`}>{annaVisual.icon}</span>}</div>{orderInboxCard}<div className="anna-copy"><div className="section-heading compact-heading"><div><p className="eyebrow">хозяйка ателье</p><h2>Анна</h2></div>{completedSketches.length > 0 && <div className="atelier-gallery" aria-label="Готовые картины Анны">{completedSketches.map((index) => <span key={index} title={DRAWING_SKETCHES[index].name} style={{ backgroundImage: `url("${assetPath(DRAWING_SKETCHES[index].asset)}")` }} />)}</div>}<span className="care-score">{averageCare}%</span></div><p className="anna-state">{annaState}</p>{celebrating && <div className="celebration-banner"><span>✦</span><strong>Заказ готов!</strong><small>{toast}</small></div>}<div className="meters"><Meter label="Сытость" value={hunger} tone="coral" /><Meter label="Энергия" value={energy} tone="gold" /><Meter label="Скука" value={boredom} tone="boredom" /></div><div className={`care-actions${drawingUnlocked ? " has-drawing" : ""}`}><button type="button" disabled={celebrating} onClick={() => careForAnna("food")}><span>☕</span><strong>Перекус</strong><small>8 ●</small></button><button type="button" disabled={celebrating} onClick={() => careForAnna("rest")}><span>☁</span><strong>Отдых</strong><small>6 ●</small></button>{activeOrder && <button type="button" onClick={() => careForAnna("sew")} disabled={celebrating || orderReady}><span>✂</span><strong>{celebrating ? "Радуется" : orderReady ? "Готово" : "Шить"}</strong><small>{celebrating ? "подождите" : orderReady ? "награда скоро" : `${orderProgress}/${order.goal}`}</small></button>}{drawingUnlocked && <button type="button" className="drawing-action" disabled={celebrating} onClick={() => setScreen("drawing")}><span>✎</span><strong>Рисовать</strong><small>− скука</small></button>}</div></div></aside>;
+  const annaCard = <aside className="anna-card panel"><div className="character-stage"><video key={annaVisual.video} className="scene-image" autoPlay loop={!celebrating} muted playsInline preload="auto" aria-label={annaVisual.alt} onEnded={celebrating ? finishCelebration : undefined}><source src={annaVisual.video} type="video/mp4" /></video><div className="stage-glow" />{atelierHud}<button type="button" className={`sound-toggle${soundEnabled ? " sound-on" : ""}`} aria-label={soundEnabled ? "Выключить звук" : "Включить звук"} aria-pressed={soundEnabled} onClick={toggleSound}><span aria-hidden="true">{soundEnabled ? "♫" : "♪"}</span></button>{!activeOrder && hasAvailableOrder ? <button type="button" className="mood-bubble order-alert-bubble" aria-label={`Новый заказ: ${order.title}`} aria-expanded={showOrderModal} onClick={() => { playSound("alert"); setShowOrderModal((value) => !value); }}><span>✉</span><b>!</b></button> : <span className={`mood-bubble${annaVisual.id !== "sewing" ? " boredom-alert" : ""}`} aria-label={`Состояние Анны: ${annaVisual.status}`}>{annaVisual.icon}</span>}</div>{orderInboxCard}<div className="anna-copy"><div className="section-heading compact-heading"><div><p className="eyebrow">хозяйка ателье</p><h2>Анна</h2></div>{completedSketches.length > 0 && <div className="atelier-gallery" aria-label="Готовые картины Анны">{completedSketches.map((index) => <span key={index} title={DRAWING_SKETCHES[index].name} style={{ backgroundImage: `url("${assetPath(DRAWING_SKETCHES[index].asset)}")` }} />)}</div>}<span className="care-score">{averageCare}%</span></div><p className="anna-state">{annaState}</p>{celebrating && <div className="celebration-banner"><span>✦</span><strong>Заказ готов!</strong><small>{toast}</small></div>}<div className="meters"><Meter label="Сытость" value={hunger} tone="coral" /><Meter label="Энергия" value={energy} tone="gold" /><Meter label="Скука" value={boredom} tone="boredom" /></div><div className={`care-actions${drawingUnlocked ? " has-drawing" : ""}`}><button type="button" disabled={celebrating} onClick={() => careForAnna("food")}><span>☕</span><strong>Перекус</strong><small>8 ●</small></button><button type="button" disabled={celebrating} onClick={() => careForAnna("rest")}><span>☁</span><strong>Отдых</strong><small>6 ●</small></button>{activeOrder && <button type="button" onClick={() => careForAnna("sew")} disabled={celebrating || orderReady}><span>✂</span><strong>{celebrating ? "Радуется" : orderReady ? "Готово" : "Шить"}</strong><small>{celebrating ? "подождите" : orderReady ? "награда скоро" : `${orderProgress}/${order.goal}`}</small></button>}{drawingUnlocked && <button type="button" className="drawing-action" disabled={celebrating} onClick={() => { playSound("tap"); setScreen("drawing"); }}><span>✎</span><strong>Рисовать</strong><small>− скука</small></button>}</div></div></aside>;
 
   const homeScreen = <section className="home-layout home-layout-single screen-enter" aria-label="Главный экран ателье">{annaCard}</section>;
 
