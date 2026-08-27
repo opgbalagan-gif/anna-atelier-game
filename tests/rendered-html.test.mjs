@@ -23,7 +23,7 @@ test("renders the Anna Atelier game", async () => {
   assert.match(html, /<title>Ателье Анны — уютная игра<\/title>/i);
   assert.match(html, /Ателье Анны/);
   assert.match(html, /Главный экран ателье/);
-  assert.match(html, /Открыть заказ/);
+  assert.match(html, /Новый заказ: Летнее платье/);
   assert.match(html, /Скука/);
   assert.doesNotMatch(html, /codex-preview|SkeletonPreview|Your site is taking shape/i);
 });
@@ -82,13 +82,15 @@ test("switches Anna states without static pictures", async () => {
   assert.match(game, /<video[^>]+autoPlay[^>]+preload="auto"/);
 });
 
-test("keeps only the title above Anna on mobile", async () => {
+test("keeps the whole tamagotchi interface inside Anna's game field", async () => {
   const game = await readFile(new URL("../app/Game.tsx", import.meta.url), "utf8");
   const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
   assert.match(game, /Ателье Анны/);
-  assert.match(game, /mobile-player-panel/);
-  assert.match(css, /\.topbar > \.topbar-stats\s*\{\s*display: none/);
-  assert.match(css, /\.mobile-player-panel\s*\{\s*display: block/);
+  assert.match(game, /className="stage-player-panel"/);
+  assert.match(game, /className="home-layout home-layout-single screen-enter"/);
+  assert.match(css, /\.home-layout-single \.anna-copy\s*\{[^}]*position: absolute/);
+  assert.match(css, /\.stage-player-panel\s*\{[^}]*position: absolute/);
+  assert.doesNotMatch(game, /mobile-player-panel|home-sidebar|home-action-card|letter-preview|Открыть заказ/);
   assert.doesNotMatch(game, /className="app-nav"/);
   assert.match(game, /className="inline-back-button"/);
 });
