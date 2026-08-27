@@ -36,7 +36,7 @@ test("connects the complete order flow", async () => {
   assert.match(game, /id="match-board"/);
   assert.match(game, /setScreen\("home"\)/);
   assert.match(game, /setCelebrating\(true\)/);
-  assert.match(game, /onEnded=\{celebrating \? finishCelebration/);
+  assert.match(game, /onEnded=\{displayedVisual\.id === "celebrates" \? finishCelebration/);
   assert.match(game, /setShowOrderReadyMessage\(true\)/);
   assert.match(game, /Заказ готов!/);
   assert.match(game, /Заказ «\$\{finishedTitle\}» готов!/);
@@ -76,10 +76,15 @@ test("shows the active match-three task below the board", async () => {
   assert.match(game, /Задание заказа/);
 });
 
-test("switches Anna states without static pictures", async () => {
+test("crossfades Anna states without revealing the brown loading surface", async () => {
   const game = await readFile(new URL("../app/Game.tsx", import.meta.url), "utf8");
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
   assert.doesNotMatch(game, /poster=|STATE_IMAGES|assets\/states\//);
-  assert.match(game, /<video[^>]+autoPlay[^>]+preload="auto"/);
+  assert.match(game, /scene-video-current/);
+  assert.match(game, /scene-video-incoming/);
+  assert.match(game, /onCanPlay=\{revealIncomingVideo\}/);
+  assert.match(game, /assets\/anna-atelier-scene\.png/);
+  assert.match(css, /\.scene-video-incoming\.scene-video-ready\s*\{[^}]*opacity: 1/);
 });
 
 test("keeps the whole tamagotchi interface compact inside Anna's game field", async () => {
@@ -117,12 +122,15 @@ test("supports swipe controls on the match-three board", async () => {
   assert.match(css, /\.match-board\s*\{[^}]*touch-action: none/);
 });
 
-test("moves the mobile match-three board closer to the top", async () => {
+test("keeps the mobile match-three game on one screen", async () => {
   const game = await readFile(new URL("../app/Game.tsx", import.meta.url), "utf8");
   const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
   assert.match(game, /screen === "match3" \? "topbar topbar-match-hidden"/);
+  assert.match(game, /game-shell game-shell-\$\{screen\}/);
   assert.match(css, /\.topbar\.topbar-match-hidden\s*\{\s*display: none/);
-  assert.match(css, /\.topbar-match-hidden ~ \.studio-window \.board-panel\s*\{\s*padding-top: 15px/);
+  assert.match(css, /\.game-shell-match3\s*\{[^}]*height: 100dvh;[^}]*overflow: hidden/);
+  assert.match(css, /\.game-shell-match3 \.match-layout\s*\{[^}]*grid-template-rows: minmax\(0, 1fr\) auto/);
+  assert.match(css, /\.game-shell-match3 \.tip-card\s*\{\s*display: none/);
   assert.doesNotMatch(css, /:has\(#match-board\)/);
 });
 
