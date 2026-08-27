@@ -20,21 +20,30 @@
 
 html {
   min-width: 320px;
+  min-height: 100%;
   background: #efe4d4;
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   min-height: 100dvh;
   margin: 0;
+  padding-right: env(safe-area-inset-right);
+  padding-left: env(safe-area-inset-left);
+  overflow-x: hidden;
   color: var(--ink);
   background:
     radial-gradient(circle at 8% 0%, rgba(255, 255, 255, 0.84), transparent 28%),
     linear-gradient(135deg, #efe4d4 0%, #f7eee2 48%, #ead9c5 100%);
   font-family: "Trebuchet MS", Arial, sans-serif;
+  overscroll-behavior: none;
 }
 
 button {
   font: inherit;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 button:focus-visible {
@@ -45,7 +54,10 @@ button:focus-visible {
 .game-shell {
   width: min(960px, calc(100% - 44px), calc(133.333dvh - 243px));
   margin: 0 auto;
-  padding: 28px 0 40px;
+  padding: max(28px, env(safe-area-inset-top)) 0 max(40px, env(safe-area-inset-bottom));
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .release-loader {
@@ -120,7 +132,7 @@ button:focus-visible {
 }
 
 .release-controls button {
-  min-height: 38px;
+  min-height: 44px;
   padding: 0 14px;
   border: 1px solid rgba(143, 68, 76, 0.18);
   border-radius: 13px;
@@ -335,30 +347,17 @@ h1 {
 .scene-video-incoming { z-index: 2; opacity: 0; transition: opacity 280ms ease; }
 .scene-video-incoming.scene-video-ready { opacity: 1; }
 
-.rest-cutscene {
-  position: fixed;
-  z-index: 100;
-  inset: 0;
-  display: grid;
-  padding: max(18px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
-  place-items: center;
-  background: rgba(44, 31, 28, 0.84);
-  backdrop-filter: blur(9px);
+.stage-rest-cutscene {
+  position: relative;
+  z-index: 5;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+  background: #281f1d;
   animation: fade-in 180ms ease both;
 }
 
-.rest-cutscene-frame {
-  position: relative;
-  overflow: hidden;
-  width: min(900px, 92vw, 122dvh);
-  aspect-ratio: 4 / 3;
-  border: 1px solid rgba(255, 244, 225, 0.32);
-  border-radius: 26px;
-  background: #281f1d;
-  box-shadow: 0 28px 90px rgba(27, 17, 14, 0.45);
-}
-
-.rest-cutscene video {
+.stage-rest-cutscene video {
   display: block;
   width: 100%;
   height: 100%;
@@ -366,9 +365,9 @@ h1 {
   background: #281f1d;
 }
 
-.rest-cutscene button {
+.stage-rest-cutscene button {
   position: absolute;
-  z-index: 2;
+  z-index: 6;
   top: 14px;
   right: 14px;
   display: grid;
@@ -386,8 +385,9 @@ h1 {
   backdrop-filter: blur(8px);
 }
 
-.rest-cutscene-frame > span {
+.stage-rest-cutscene > span {
   position: absolute;
+  z-index: 6;
   right: 20px;
   bottom: 16px;
   padding: 7px 11px;
@@ -397,6 +397,145 @@ h1 {
   font: italic 13px/1 Georgia, serif;
   backdrop-filter: blur(7px);
 }
+
+.pwa-stage-actions {
+  position: absolute;
+  z-index: 3;
+  top: 82px;
+  left: 22px;
+  display: flex;
+  max-width: calc(100% - 44px);
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.pwa-stage-actions button {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  border-radius: 14px;
+  color: #fff9ec;
+  background: rgba(77, 52, 46, 0.82);
+  box-shadow: 0 7px 20px rgba(0, 0, 0, 0.14);
+  font-size: 8px;
+  font-weight: 800;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+}
+
+.pwa-stage-actions button:disabled { cursor: wait; opacity: 0.66; }
+.pwa-stage-actions button > span { font-size: 16px; line-height: 1; }
+.pwa-stage-actions button > b { font: inherit; }
+.pwa-stage-actions .notification-game-button { background: rgba(24, 35, 57, 0.84); }
+.pwa-stage-actions .notification-enabled { background: rgba(47, 119, 115, 0.9); }
+
+.pwa-dialog-backdrop {
+  position: fixed;
+  z-index: 120;
+  inset: 0;
+  display: grid;
+  padding: max(14px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+  place-items: center;
+  background: rgba(44, 31, 28, 0.76);
+  backdrop-filter: blur(8px);
+  animation: fade-in 180ms ease both;
+}
+
+.pwa-dialog {
+  position: relative;
+  overflow: auto;
+  width: min(430px, 100%);
+  max-height: min(660px, 100%);
+  padding: 30px;
+  border: 1px solid rgba(183, 95, 101, 0.2);
+  border-radius: 28px;
+  color: var(--ink);
+  background: linear-gradient(145deg, #fffaf2, #f7ead8);
+  box-shadow: 0 26px 80px rgba(43, 27, 23, 0.35);
+}
+
+.pwa-dialog h2 {
+  max-width: 330px;
+  margin: 7px 0 12px;
+  font-size: 30px;
+  line-height: 1.05;
+}
+
+.pwa-dialog-mark {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  margin-bottom: 14px;
+  place-items: center;
+  border-radius: 50% 50% 44% 56%;
+  color: #fff8ed;
+  background: linear-gradient(145deg, #c87175, #9e4e57);
+  box-shadow: inset 0 0 0 4px rgba(255, 255, 255, 0.16);
+  font: italic 700 28px/1 Georgia, serif;
+}
+
+.pwa-dialog-mark.notification-mark { border-radius: 50%; background: var(--teal); font-style: normal; }
+
+.pwa-dialog-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: var(--rose-dark);
+  background: rgba(183, 95, 101, 0.1);
+  font-size: 25px;
+  cursor: pointer;
+}
+
+.pwa-dialog ol {
+  display: grid;
+  margin: 18px 0;
+  padding: 0;
+  gap: 9px;
+  list-style: none;
+}
+
+.pwa-dialog li {
+  display: flex;
+  min-height: 62px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.56);
+}
+
+.pwa-dialog li > span {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--rose);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.pwa-dialog li strong,
+.pwa-dialog li small { display: block; }
+.pwa-dialog li strong { font-size: 11px; }
+.pwa-dialog li small { margin-top: 3px; color: var(--muted); font-size: 8px; line-height: 1.35; }
+.pwa-dialog > .primary-button { width: 100%; min-height: 48px; }
+.pwa-dialog-copy { color: var(--muted); font-size: 11px; line-height: 1.6; }
+.pwa-dialog-message { margin-top: 14px; padding: 11px 12px; border-radius: 14px; color: var(--teal); background: #e5f0eb; font-size: 9px; line-height: 1.45; }
+.pwa-dialog-actions { display: grid; margin-top: 18px; grid-template-columns: 0.8fr 1.2fr; gap: 9px; }
+.pwa-dialog-actions button { min-height: 48px; }
+.pwa-dialog-actions .notification-disable { background: var(--rose-dark); }
 
 .stage-glow {
   position: absolute;
@@ -417,8 +556,8 @@ h1 {
   top: 22px;
   right: 22px;
   display: grid;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   place-items: center;
   border: 1px solid rgba(255, 255, 255, 0.35);
   border-radius: 50%;
@@ -459,8 +598,8 @@ h1 {
   top: 22px;
   right: 74px;
   display: grid;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   padding: 0;
   place-items: center;
   border: 1px solid rgba(255, 255, 255, 0.3);
@@ -674,8 +813,8 @@ h1 {
 
 .inline-back-button {
   display: grid;
-  width: 38px;
-  height: 38px;
+  width: 44px;
+  height: 44px;
   flex: 0 0 auto;
   place-items: center;
   border: 1px solid rgba(143, 68, 76, 0.18);
@@ -1506,9 +1645,9 @@ h1 {
 .order-inbox-card .order-letter { padding: 13px 0; font-size: 14px; line-height: 1.48; }
 .order-inbox-card .modal-order-details { margin: 14px 0; }
 .order-inbox-card .modal-order-details div { padding: 9px; }
-.order-inbox-card .modal-actions button { min-height: 43px; }
+.order-inbox-card .modal-actions button { min-height: 44px; }
 .order-modal h2 { margin: 7px 0 18px; color: #4e3835; font: 600 34px/1.05 Georgia, serif; }
-.modal-close { position: absolute; top: 13px; right: 15px; width: 34px; height: 34px; border: 0; border-radius: 50%; color: var(--rose-dark); background: rgba(183, 95, 101, 0.1); font-size: 23px; cursor: pointer; }
+.modal-close { position: absolute; top: 13px; right: 15px; width: 44px; height: 44px; border: 0; border-radius: 50%; color: var(--rose-dark); background: rgba(183, 95, 101, 0.1); font-size: 23px; cursor: pointer; }
 .letter-stamp { position: absolute; top: 45px; right: 46px; display: grid; width: 54px; height: 64px; place-items: center; border: 3px dotted rgba(183, 95, 101, 0.34); color: var(--rose); font-size: 24px; transform: rotate(5deg); }
 .modal-client { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
 .modal-client > span { display: grid; width: 40px; height: 40px; place-items: center; border-radius: 50%; color: #fff; background: var(--teal); font: italic 700 18px Georgia, serif; }
@@ -1575,7 +1714,7 @@ h1 {
 @media (max-width: 760px) {
   .game-shell {
     width: min(560px, calc(100% - 20px));
-    padding: 9px 0 calc(30px + env(safe-area-inset-bottom));
+    padding: max(9px, env(safe-area-inset-top)) 0 max(30px, env(safe-area-inset-bottom));
   }
 
   .topbar {
@@ -1586,7 +1725,7 @@ h1 {
 
   .release-controls { gap: 5px; }
   .release-controls > span { display: none; }
-  .release-controls button { min-height: 34px; padding: 0 10px; font-size: 8px; }
+  .release-controls button { min-height: 44px; padding: 0 10px; font-size: 8px; }
 
   .topbar .eyebrow {
     display: none;
@@ -1619,7 +1758,7 @@ h1 {
 
   .home-layout-single .anna-card {
     display: grid;
-    height: calc(100dvh - 120px);
+    height: calc(100dvh - 120px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
     min-height: 0;
     aspect-ratio: auto;
     grid-template-columns: 1fr;
@@ -1645,7 +1784,7 @@ h1 {
   .home-layout-single .meter-copy strong { font-size: 9px; }
   .home-layout-single .meter-track { height: 5px; }
   .home-layout-single .care-actions { gap: 5px; margin-top: 8px; }
-  .home-layout-single .care-actions button { min-height: 40px; padding: 5px 4px; }
+  .home-layout-single .care-actions button { min-height: 44px; padding: 5px 4px; }
 
   .home-layout-single .atelier-hud {
     top: 14px;
@@ -1658,16 +1797,20 @@ h1 {
 
   .home-layout-single .mood-bubble { top: 14px; right: 14px; }
   .home-layout-single .sound-toggle { top: 14px; right: 64px; }
+  .home-layout-single .pwa-stage-actions { top: 64px; left: 14px; max-width: calc(100% - 28px); gap: 5px; }
+  .home-layout-single .pwa-stage-actions button { min-height: 44px; padding: 0 9px; border-radius: 12px; font-size: 7px; }
+  .home-layout-single .pwa-stage-actions button > span { font-size: 14px; }
 
   .character-stage {
     height: auto;
     min-height: 310px;
   }
 
-  .rest-cutscene { padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left)); }
-  .rest-cutscene-frame { width: min(100%, 122dvh); border-radius: 18px; }
-  .rest-cutscene button { top: 9px; right: 9px; width: 38px; height: 38px; }
-  .rest-cutscene-frame > span { right: 12px; bottom: 10px; font-size: 11px; }
+  .stage-rest-cutscene button { top: 9px; right: 9px; width: 42px; height: 42px; }
+  .stage-rest-cutscene > span { right: 12px; bottom: 10px; font-size: 11px; }
+
+  .pwa-dialog { padding: 26px 20px 20px; border-radius: 22px; }
+  .pwa-dialog h2 { max-width: calc(100% - 38px); font-size: 25px; }
 
   .character-stage .scene-image {
     width: 100%;
@@ -1811,7 +1954,7 @@ h1 {
   .game-shell-match3 {
     height: 100dvh;
     min-height: 0;
-    padding: 8px 0 calc(8px + env(safe-area-inset-bottom));
+    padding: max(8px, env(safe-area-inset-top)) 0 max(8px, env(safe-area-inset-bottom));
     overflow: hidden;
   }
 
@@ -1844,10 +1987,7 @@ h1 {
     font-size: 21px;
   }
 
-  .game-shell-match3 .inline-back-button {
-    width: 36px;
-    height: 36px;
-  }
+  .game-shell-match3 .inline-back-button { width: 44px; height: 44px; }
 
   .game-shell-match3 .moves-badge {
     min-width: 58px;
@@ -1944,7 +2084,7 @@ h1 {
   .game-shell-drawing {
     height: 100dvh;
     min-height: 0;
-    padding: 8px 0 calc(8px + env(safe-area-inset-bottom));
+    padding: max(8px, env(safe-area-inset-top)) 0 max(8px, env(safe-area-inset-bottom));
     overflow: hidden;
   }
 
@@ -1978,7 +2118,7 @@ h1 {
 
   .game-shell-drawing .mode-heading .eyebrow { display: none; }
   .game-shell-drawing .mode-heading h2 { margin: 0; font-size: 19px; }
-  .game-shell-drawing .inline-back-button { width: 34px; height: 34px; }
+  .game-shell-drawing .inline-back-button { width: 44px; height: 44px; }
 
   .game-shell-drawing .sketch-page {
     display: grid;
@@ -2035,7 +2175,7 @@ h1 {
   .game-shell-drawing .drawing-step-controls { min-height: 0; gap: 4px; }
   .game-shell-drawing .drawing-step-controls > p { display: none; }
   .game-shell-drawing .drawing-step-controls > div { grid-template-columns: 0.8fr 1.2fr; gap: 5px; }
-  .game-shell-drawing .drawing-step-controls button { min-height: 36px; }
+  .game-shell-drawing .drawing-step-controls button { min-height: 44px; }
 
   .game-shell-drawing .color-palette,
   .game-shell-drawing .stamp-palette {
@@ -2046,7 +2186,7 @@ h1 {
 
   .game-shell-drawing .color-palette > button:not(.palette-next),
   .game-shell-drawing .stamp-palette > button:not(.stamp-finish) {
-    min-height: 42px;
+    min-height: 44px;
     gap: 2px;
     border-radius: 10px;
   }
@@ -2055,7 +2195,7 @@ h1 {
   .game-shell-drawing .color-palette small,
   .game-shell-drawing .stamp-palette small { font-size: 6px; }
   .game-shell-drawing .palette-next,
-  .game-shell-drawing .stamp-finish { min-height: 34px; }
+  .game-shell-drawing .stamp-finish { min-height: 44px; }
   .game-shell-drawing .stamp-palette { grid-template-columns: repeat(3, 1fr); }
   .game-shell-drawing .stamp-palette button > span { font-size: 22px; }
 
@@ -2215,7 +2355,7 @@ h1 {
   .game-shell-match3 .board-heading { margin-bottom: 4px; }
   .game-shell-match3 .board-heading .eyebrow { display: none; }
   .game-shell-match3 .board-heading h2 { font-size: 20px; }
-  .game-shell-match3 .inline-back-button { width: 34px; height: 34px; }
+  .game-shell-match3 .inline-back-button { width: 44px; height: 44px; }
   .game-shell-match3 .moves-badge { height: 38px; }
   .game-shell-match3 .match-board { width: min(100%, calc(100dvh - 100px)); padding: 5px; gap: 3px; }
   .game-shell-match3 .board-footer { min-height: 22px; padding-top: 3px; }

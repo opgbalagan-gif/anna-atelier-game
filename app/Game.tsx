@@ -4,6 +4,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { clearGameSave, readGameSave, RELEASE_VERSION, writeGameSave } from "./game-save";
 import type { GameSaveState } from "./game-save";
+import {
+  disablePushNotifications,
+  enablePushNotifications,
+  fetchPushBackendConfig,
+  hasPushSubscription,
+  isIosDevice,
+  isStandaloneMode,
+  PushClientError,
+  registerGameServiceWorker,
+  supportsWebPush,
+  writeNotificationPreference,
+} from "./pwa-client";
+import type { DeferredInstallPrompt, PushBackendConfig } from "./pwa-client";
 
 const BOARD_SIZE = 7;
 const STARTING_MOVES = 24;
@@ -213,12 +226,22 @@ export default function Game() {
   const [restCutsceneOpen, setRestCutsceneOpen] = useState(false);
   const [toast, setToast] = useState("В ателье пришёл новый заказ");
   const [soundEnabled, setSoundEnabled] = useState(false);
+  const [standaloneMode, setStandaloneMode] = useState(() => typeof window !== "undefined" && isStandaloneMode());
+  const [iosDevice] = useState(() => typeof window !== "undefined" && isIosDevice());
+  const [deferredInstallPrompt, setDeferredInstallPrompt] = useState<DeferredInstallPrompt | null>(null);
+  const [installHelpOpen, setInstallHelpOpen] = useState(false);
+  const [pushDialogOpen, setPushDialogOpen] = useState(false);
+  const [pushSupported] = useState(() => typeof window !== "undefined" && supportsWebPush());
+  const [pushBackendConfig, setPushBackendConfig] = useState<PushBackendConfig | null>(null);
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pwaActionBusy, setPwaActionBusy] = useState(false);
+  const [pushMessage, setPushMessage] = useState("");
   const soundEnabledRef = useRef(false);
   const audioContextRef = useRef<AudioContext | null>(null);
   const soundtrackRef = useRef<HTMLAudioElement | null>(null);
+  const serviceWorkerRegistrationRef = useRef<ServiceWorkerRegistration | null>(null);
   const temporaryStateTimer = useRef<number | null>(null);
   const restCutsceneActiveRef = useRef(false);
-  const restCutsceneCloseButtonRef = useRef<HTMLButtonElement | null>(null);
   const saveSnapshotRef = useRef<GameSaveState | null>(null);
   const resetInProgressRef = useRef(false);
   const gameSessionRef = useRef(0);
@@ -312,6 +335,78 @@ export default function Game() {
       window.removeEventListener("beforeunload", persist);
     };
   }, [saveReady]);
+
+  useEffect(() => {
+    if (!saveReady) return;
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      const url = new URL(window.location.href);
+      const destination = url.searchParams.get("destination")?.toLowerCase();
+      if (!destination) return;
+
+      if (destination === "drawing" && drawingUnlocked) {
+        setScreen("drawing");
+        setToast("Анна открыла альбом вдохновения");
+      } else if (["order", "orders", "match3"].includes(destination)) {
+        if (activeOrder) {
+          setScreen("match3");
+          setToast("Продолжаем собирать материалы для заказа");
+        } else if (hasAvailableOrder) {
+          setScreen("home");
+          setShowOrderModal(true);
+          setToast("В ателье пришёл новый заказ");
+        }
+      } else {
+        setScreen("home");
+      }
+
+      url.searchParams.delete("destination");
+      url.searchParams.delete("action");
+      url.searchParams.delete("type");
+      window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+    });
+    return () => { cancelled = true; };
+  }, [activeOrder, drawingUnlocked, hasAvailableOrder, saveReady]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const displayMode = window.matchMedia("(display-mode: standalone)");
+    const updateStandaloneMode = () => setStandaloneMode(isStandaloneMode());
+    const captureInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setDeferredInstallPrompt(event as DeferredInstallPrompt);
+    };
+    const markInstalled = () => {
+      setStandaloneMode(true);
+      setDeferredInstallPrompt(null);
+      setInstallHelpOpen(false);
+      setToast("Ателье Анны добавлено на телефон");
+    };
+
+    window.addEventListener("beforeinstallprompt", captureInstallPrompt);
+    window.addEventListener("appinstalled", markInstalled);
+    displayMode.addEventListener?.("change", updateStandaloneMode);
+
+    void registerGameServiceWorker().then(async (registration) => {
+      if (cancelled || !registration) return;
+      serviceWorkerRegistrationRef.current = registration;
+      const [config, subscribed] = await Promise.all([
+        fetchPushBackendConfig(),
+        hasPushSubscription(registration),
+      ]);
+      if (cancelled) return;
+      setPushBackendConfig(config);
+      setPushEnabled(subscribed);
+    });
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("beforeinstallprompt", captureInstallPrompt);
+      window.removeEventListener("appinstalled", markInstalled);
+      displayMode.removeEventListener?.("change", updateStandaloneMode);
+    };
+  }, []);
 
   const playSound = useCallback((effect: SoundEffect, force = false) => {
     if (!force && !soundEnabledRef.current) return;
@@ -468,17 +563,23 @@ export default function Game() {
 
   useEffect(() => {
     if (!restCutsceneOpen) return;
-    const focusFrame = window.requestAnimationFrame(() => restCutsceneCloseButtonRef.current?.focus());
+    const safelyInterruptRest = () => {
+      restCutsceneActiveRef.current = false;
+      setRestCutsceneOpen(false);
+      setToast("Анна вернулась отдохнувшей");
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === "hidden") safelyInterruptRest();
+    };
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        restCutsceneActiveRef.current = false;
-        setRestCutsceneOpen(false);
-        setToast("Анна вернулась отдохнувшей");
+        safelyInterruptRest();
       }
     };
+    document.addEventListener("visibilitychange", handleVisibility);
     window.addEventListener("keydown", closeOnEscape);
     return () => {
-      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener("visibilitychange", handleVisibility);
       window.removeEventListener("keydown", closeOnEscape);
     };
   }, [restCutsceneOpen]);
@@ -624,6 +725,70 @@ export default function Game() {
     setToast(failed ? "Отдых завершён — ролик не удалось воспроизвести" : "Анна вернулась отдохнувшей");
   }
 
+  async function requestInstallation() {
+    playSound("tap");
+    if (iosDevice) {
+      setInstallHelpOpen(true);
+      return;
+    }
+    if (!deferredInstallPrompt) return;
+    setPwaActionBusy(true);
+    try {
+      await deferredInstallPrompt.prompt();
+      const choice = await deferredInstallPrompt.userChoice;
+      setDeferredInstallPrompt(null);
+      setToast(choice.outcome === "accepted" ? "Установка Ателье Анны началась" : "Игру можно добавить позже");
+    } catch {
+      setToast("Откройте меню браузера и выберите установку приложения");
+    } finally {
+      setPwaActionBusy(false);
+    }
+  }
+
+  function openPushPreferences() {
+    playSound("tap");
+    setPushMessage("");
+    setPushDialogOpen(true);
+  }
+
+  function dismissPushDialog() {
+    if (!pushEnabled) writeNotificationPreference(window.localStorage, "dismissed");
+    setPushDialogOpen(false);
+  }
+
+  async function enableNotifications() {
+    if (!pushBackendConfig || !serviceWorkerRegistrationRef.current) return;
+    setPwaActionBusy(true);
+    setPushMessage("");
+    try {
+      await enablePushNotifications(serviceWorkerRegistrationRef.current, pushBackendConfig);
+      setPushEnabled(true);
+      setPushMessage("Анна сможет позвать тебя в ателье");
+      setToast("Уведомления включены");
+    } catch (error) {
+      if (error instanceof PushClientError && error.code === "authorization-required") {
+        setPushMessage("Сессия закончилась. Войдите в аккаунт магазина и попробуйте снова.");
+      } else if (error instanceof PushClientError && error.code === "permission-denied") {
+        writeNotificationPreference(window.localStorage, "dismissed");
+        setPushMessage("Уведомления не включены. Разрешение можно изменить в настройках браузера.");
+      } else {
+        setPushMessage("Не удалось подключить уведомления. Попробуйте позже.");
+      }
+    } finally {
+      setPwaActionBusy(false);
+    }
+  }
+
+  async function disableNotifications() {
+    setPwaActionBusy(true);
+    setPushMessage("");
+    const result = await disablePushNotifications(serviceWorkerRegistrationRef.current);
+    setPushEnabled(false);
+    setPushMessage(result.serverSynced ? "Уведомления выключены" : "Уведомления выключены на этом телефоне");
+    setToast("Уведомления выключены");
+    setPwaActionBusy(false);
+  }
+
   function resetGame() {
     resetInProgressRef.current = true;
     gameSessionRef.current += 1;
@@ -657,6 +822,8 @@ export default function Game() {
     setBoredom(28);
     setTemporaryState(null);
     setRestCutsceneOpen(false);
+    setInstallHelpOpen(false);
+    setPushDialogOpen(false);
     setToast("Новая игра началась");
     setSoundEnabled(false);
     soundEnabledRef.current = false;
@@ -703,6 +870,7 @@ export default function Game() {
     } else {
       setEnergy((value) => Math.min(100, value + 20));
       setTemporaryState(null);
+      setShowOrderModal(false);
       restCutsceneActiveRef.current = true;
       setRestCutsceneOpen(true);
     }
@@ -897,13 +1065,51 @@ export default function Game() {
 
   if (!saveReady) return <main className="release-loader" role="status" aria-live="polite"><div className="release-loader-mark" aria-hidden="true">А</div><strong>Ателье Анны</strong><span>Загружаем мастерскую…</span><i aria-hidden="true" /></main>;
 
+  const showInstallAction = !standaloneMode && (iosDevice || deferredInstallPrompt !== null);
+  const showPushAction = pushSupported && pushBackendConfig !== null;
+  const pushRequiresInstallation = iosDevice && !standaloneMode;
   const atelierHud = <div className="atelier-hud" aria-label={`Уровень ${level}, монет: ${coins}`}><span className="atelier-level"><small>Уровень</small><strong>{level}</strong></span><span className="atelier-hud-divider" aria-hidden="true" /><span className="atelier-coins"><b aria-hidden="true">●</b><strong>{coins}</strong><small>монет</small></span></div>;
 
   const header = <header className={screen === "home" ? "topbar" : "topbar topbar-match-hidden"}><div className="brand-lockup"><div className="brand-mark" aria-hidden="true">А</div><div><p className="eyebrow">уютная история мастерской</p><h1>Ателье Анны</h1></div></div><div className="release-controls"><span>v{RELEASE_VERSION}</span><button type="button" onClick={requestNewGame}>Новая игра</button></div></header>;
 
   const orderInboxCard = showOrderModal && !activeOrder && hasAvailableOrder ? <section className="order-modal order-inbox-card" role="dialog" aria-modal="false" aria-labelledby="new-order-title"><button type="button" className="modal-close" aria-label="Закрыть письмо" onClick={() => setShowOrderModal(false)}>×</button><div className="letter-stamp" aria-hidden="true">✿</div><p className="eyebrow">новый заказ</p><h2 id="new-order-title">{order.title}</h2><div className="modal-client"><span>{order.client.slice(0, 1)}</span><div><small>Пишет</small><strong>{order.client}</strong></div></div><p className="order-letter">«{order.note}. Очень надеюсь на ваше мастерство, Анна!»</p><div className="modal-order-details"><div><span>Материал</span><strong>{TILE_TYPES[order.tile].short} · {order.goal}</strong></div><div><span>Срок</span><strong>{order.time}</strong></div><div><span>Награда</span><strong>{order.reward} ●</strong></div></div><div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setShowOrderModal(false)}>Не сейчас</button><button type="button" className="primary-button" onClick={acceptOrder}>Принять заказ</button></div></section> : null;
 
-  const annaCard = <aside className="anna-card panel"><div className="character-stage" style={{ backgroundImage: `url("${assetPath("assets/anna-atelier-scene.png")}")` }}><video key={displayedVisual.video} className="scene-image scene-video-current" autoPlay loop={displayedVisual.id !== "celebrates"} muted playsInline preload="auto" aria-label={displayedVisual.alt} onEnded={displayedVisual.id === "celebrates" ? finishCelebration : undefined}><source src={displayedVisual.video} type="video/mp4" /></video>{incomingVisual && <video key={incomingVisual.video} className={`scene-image scene-video-incoming${incomingReady ? " scene-video-ready" : ""}`} autoPlay loop={incomingVisual.id !== "celebrates"} muted playsInline preload="auto" aria-label={incomingVisual.alt} onCanPlay={revealIncomingVideo} onEnded={incomingVisual.id === "celebrates" ? finishCelebration : undefined}><source src={incomingVisual.video} type="video/mp4" /></video>}<div className="stage-glow" />{atelierHud}<button type="button" className={`sound-toggle${soundEnabled ? " sound-on" : ""}`} aria-label={soundEnabled ? "Выключить звук" : "Включить звук"} aria-pressed={soundEnabled} onClick={toggleSound}><span aria-hidden="true">{soundEnabled ? "♫" : "♪"}</span></button>{!activeOrder && hasAvailableOrder ? <button type="button" className="mood-bubble order-alert-bubble" aria-label={`Новый заказ: ${order.title}`} aria-expanded={showOrderModal} onClick={() => { playSound("alert"); setShowOrderModal((value) => !value); }}><span>✉</span><b>!</b></button> : <span className={`mood-bubble${annaVisual.id !== "sewing" ? " boredom-alert" : ""}`} aria-label={`Состояние Анны: ${annaVisual.status}`}>{annaVisual.icon}</span>}</div>{orderInboxCard}<div className="anna-copy"><div className="section-heading compact-heading"><div><p className="eyebrow">хозяйка ателье</p><h2>Анна</h2></div>{completedSketches.length > 0 && <div className="atelier-gallery" aria-label="Готовые картины Анны">{completedSketches.map((index) => <span key={index} title={DRAWING_SKETCHES[index].name} style={{ backgroundImage: `url("${assetPath(DRAWING_SKETCHES[index].asset)}")` }} />)}</div>}<span className="care-score">{averageCare}%</span></div><p className="anna-state">{annaState}</p><div className="meters"><Meter label="Сытость" value={hunger} tone="coral" /><Meter label="Энергия" value={energy} tone="gold" /><Meter label="Скука" value={boredom} tone="boredom" /></div><div className={`care-actions${drawingUnlocked ? " has-drawing" : ""}`}><button type="button" disabled={celebrating} onClick={() => careForAnna("food")}><span>☕</span><strong>Перекус</strong><small>8 ●</small></button><button type="button" disabled={celebrating || restCutsceneOpen} onClick={() => careForAnna("rest")}><span>☁</span><strong>Отдых</strong><small>6 ●</small></button>{activeOrder && <button type="button" onClick={() => careForAnna("sew")} disabled={celebrating || orderReady}><span>✂</span><strong>{orderReady ? "Готово" : "Шить"}</strong><small>{orderProgress}/{order.goal}</small></button>}{drawingUnlocked && <button type="button" className="drawing-action" disabled={celebrating} onClick={() => { playSound("tap"); setScreen("drawing"); }}><span>✎</span><strong>Рисовать</strong><small>− скука</small></button>}</div></div></aside>;
+  const annaCard = (
+    <aside className="anna-card panel">
+      <div className="character-stage" style={{ backgroundImage: `url("${assetPath("assets/anna-atelier-scene.png")}")` }}>
+        <video key={displayedVisual.video} className="scene-image scene-video-current" autoPlay loop={displayedVisual.id !== "celebrates"} muted playsInline preload="auto" aria-label={displayedVisual.alt} onEnded={displayedVisual.id === "celebrates" ? finishCelebration : undefined}><source src={displayedVisual.video} type="video/mp4" /></video>
+        {incomingVisual && <video key={incomingVisual.video} className={`scene-image scene-video-incoming${incomingReady ? " scene-video-ready" : ""}`} autoPlay loop={incomingVisual.id !== "celebrates"} muted playsInline preload="auto" aria-label={incomingVisual.alt} onCanPlay={revealIncomingVideo} onEnded={incomingVisual.id === "celebrates" ? finishCelebration : undefined}><source src={incomingVisual.video} type="video/mp4" /></video>}
+        {restCutsceneOpen && (
+          <div className="stage-rest-cutscene" role="group" aria-label="Отдых Анны у моря">
+            <video autoPlay muted playsInline preload="auto" onEnded={() => finishRestCutscene()} onError={() => finishRestCutscene(true)}>
+              <source src={assetPath("assets/videos/anna-resting.mp4")} type="video/mp4" />
+            </video>
+            <button type="button" onClick={() => finishRestCutscene()} aria-label="Закончить отдых">×</button>
+            <span>Отдых у моря</span>
+          </div>
+        )}
+        {!restCutsceneOpen && (
+          <>
+            <div className="stage-glow" />
+            {atelierHud}
+            <button type="button" className={`sound-toggle${soundEnabled ? " sound-on" : ""}`} aria-label={soundEnabled ? "Выключить звук" : "Включить звук"} aria-pressed={soundEnabled} onClick={toggleSound}><span aria-hidden="true">{soundEnabled ? "♫" : "♪"}</span></button>
+            {!activeOrder && hasAvailableOrder ? <button type="button" className="mood-bubble order-alert-bubble" aria-label={`Новый заказ: ${order.title}`} aria-expanded={showOrderModal} onClick={() => { playSound("alert"); setShowOrderModal((value) => !value); }}><span>✉</span><b>!</b></button> : <span className={`mood-bubble${annaVisual.id !== "sewing" ? " boredom-alert" : ""}`} aria-label={`Состояние Анны: ${annaVisual.status}`}>{annaVisual.icon}</span>}
+            {(showInstallAction || showPushAction) && <div className="pwa-stage-actions">
+              {showInstallAction && <button type="button" className="install-game-button" disabled={pwaActionBusy} onClick={() => void requestInstallation()}><span aria-hidden="true">↧</span>Добавить на телефон</button>}
+              {showPushAction && <button type="button" className={`notification-game-button${pushEnabled ? " notification-enabled" : ""}`} aria-label={pushEnabled ? "Настройки уведомлений, включены" : "Настройки уведомлений"} aria-pressed={pushEnabled} onClick={openPushPreferences}><span aria-hidden="true">♢</span><b>Уведомления</b></button>}
+            </div>}
+          </>
+        )}
+      </div>
+      {orderInboxCard}
+      <div className="anna-copy">
+        <div className="section-heading compact-heading"><div><p className="eyebrow">хозяйка ателье</p><h2>Анна</h2></div>{completedSketches.length > 0 && <div className="atelier-gallery" aria-label="Готовые картины Анны">{completedSketches.map((index) => <span key={index} title={DRAWING_SKETCHES[index].name} style={{ backgroundImage: `url("${assetPath(DRAWING_SKETCHES[index].asset)}")` }} />)}</div>}<span className="care-score">{averageCare}%</span></div>
+        <p className="anna-state">{annaState}</p>
+        <div className="meters"><Meter label="Сытость" value={hunger} tone="coral" /><Meter label="Энергия" value={energy} tone="gold" /><Meter label="Скука" value={boredom} tone="boredom" /></div>
+        <div className={`care-actions${drawingUnlocked ? " has-drawing" : ""}`}><button type="button" disabled={celebrating} onClick={() => careForAnna("food")}><span>☕</span><strong>Перекус</strong><small>8 ●</small></button><button type="button" disabled={celebrating || restCutsceneOpen} onClick={() => careForAnna("rest")}><span>☁</span><strong>Отдых</strong><small>6 ●</small></button>{activeOrder && <button type="button" onClick={() => careForAnna("sew")} disabled={celebrating || orderReady}><span>✂</span><strong>{orderReady ? "Готово" : "Шить"}</strong><small>{orderProgress}/{order.goal}</small></button>}{drawingUnlocked && <button type="button" className="drawing-action" disabled={celebrating} onClick={() => { playSound("tap"); setScreen("drawing"); }}><span>✎</span><strong>Рисовать</strong><small>− скука</small></button>}</div>
+      </div>
+    </aside>
+  );
 
   const homeScreen = <section className="home-layout home-layout-single screen-enter" aria-label="Главный экран ателье">{annaCard}</section>;
 
@@ -946,5 +1152,12 @@ export default function Game() {
     </section>
   );
 
-  return <main className={`game-shell game-shell-${screen}`}>{header}<section className={`studio-window studio-window-${screen}`} aria-label="Главное окно игры">{screen === "home" && homeScreen}{screen === "match3" && matchScreen}{screen === "drawing" && drawingScreen}</section>{restCutsceneOpen && <section className="rest-cutscene" role="dialog" aria-modal="true" aria-label="Отдых Анны у моря"><div className="rest-cutscene-frame"><video autoPlay muted playsInline preload="auto" onEnded={() => finishRestCutscene()} onError={() => finishRestCutscene(true)}><source src={assetPath("assets/videos/anna-resting.mp4")} type="video/mp4" /></video><button ref={restCutsceneCloseButtonRef} type="button" onClick={() => finishRestCutscene()} aria-label="Закрыть сцену отдыха">×</button><span>Отдых у моря</span></div></section>}</main>;
+  return (
+    <main className={`game-shell game-shell-${screen}`}>
+      {header}
+      <section className={`studio-window studio-window-${screen}`} aria-label="Главное окно игры">{screen === "home" && homeScreen}{screen === "match3" && matchScreen}{screen === "drawing" && drawingScreen}</section>
+      {installHelpOpen && <section className="pwa-dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="install-help-title"><div className="pwa-dialog"><button type="button" className="pwa-dialog-close" aria-label="Закрыть подсказку" onClick={() => setInstallHelpOpen(false)}>×</button><div className="pwa-dialog-mark" aria-hidden="true">А</div><p className="eyebrow">приложение для телефона</p><h2 id="install-help-title">Добавь Ателье Анны на экран телефона</h2><ol><li><span>1</span><div><strong>Открой игру в Safari</strong><small>Установка на iPhone выполняется из Safari.</small></div></li><li><span>2</span><div><strong>Нажми «Поделиться»</strong><small>Кнопка с квадратом и стрелкой вверх.</small></div></li><li><span>3</span><div><strong>Выбери «На экран Домой»</strong><small>После этого игра откроется как отдельное приложение.</small></div></li></ol><button type="button" className="primary-button" onClick={() => setInstallHelpOpen(false)}>Понятно</button></div></section>}
+      {pushDialogOpen && <section className="pwa-dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="push-dialog-title"><div className="pwa-dialog"><button type="button" className="pwa-dialog-close" aria-label="Закрыть настройки уведомлений" onClick={dismissPushDialog}>×</button><div className="pwa-dialog-mark notification-mark" aria-hidden="true">♢</div><p className="eyebrow">тихие напоминания</p><h2 id="push-dialog-title">Анна может позвать тебя в ателье</h2><p className="pwa-dialog-copy">Только полезные сообщения о настоящих событиях игры. Ателье полностью работает и без уведомлений.</p>{pushRequiresInstallation ? <p className="pwa-dialog-message">На iPhone уведомления доступны после добавления игры на экран Домой.</p> : pushMessage && <p className="pwa-dialog-message" role="status">{pushMessage}</p>}<div className="pwa-dialog-actions"><button type="button" className="secondary-button" onClick={dismissPushDialog}>Не сейчас</button>{pushRequiresInstallation ? <button type="button" className="primary-button" onClick={() => { setPushDialogOpen(false); setInstallHelpOpen(true); }}>Как установить</button> : pushEnabled ? <button type="button" className="primary-button notification-disable" disabled={pwaActionBusy} onClick={() => void disableNotifications()}>Выключить</button> : <button type="button" className="primary-button" disabled={pwaActionBusy} onClick={() => void enableNotifications()}>Разрешить уведомления</button>}</div></div></section>}
+    </main>
+  );
 }

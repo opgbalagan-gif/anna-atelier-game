@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { GAME_SAVE_KEY, parseGameSave, RELEASE_VERSION } from "../app/game-save.ts";
+import { disablePushNotifications, enablePushNotifications } from "../app/pwa-client.ts";
 
 async function render() {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
@@ -215,11 +216,12 @@ test("keeps each Anna video ready for streaming playback", async () => {
 
 test("plays the supplied rest animation without moving the care controls", async () => {
   const game = await readFile(new URL("../app/Game.tsx", import.meta.url), "utf8");
-  assert.match(game, /className="rest-cutscene"/);
+  assert.match(game, /className="stage-rest-cutscene"/);
   assert.match(game, /assets\/videos\/anna-resting\.mp4/);
   assert.match(game, /restCutsceneActiveRef\.current/);
   assert.match(game, /onEnded=\{\(\) => finishRestCutscene\(\)\}/);
   assert.match(game, /<video autoPlay muted playsInline preload="auto"/);
+  assert.doesNotMatch(game, /className="rest-cutscene"|aria-label="Отдых Анны у моря"[^>]*aria-modal="true"/);
   assert.doesNotMatch(game, /<video autoPlay loop muted playsInline[^>]*anna-resting/);
   assert.doesNotMatch(game, /className="celebration-banner"/);
   assert.doesNotMatch(game, /celebrating \? "Радуется"/);
@@ -245,6 +247,133 @@ test("builds a movable release with a polished loading state", async () => {
   assert.match(html, /Загружаем мастерскую/);
   assert.match(html, /content="1\.0\.0"/);
   assert.match(config, /base: "\.\/"/);
+});
+
+test("ships an installable subdirectory-safe PWA", async () => {
+  const html = await readFile(new URL("../github-pages/index.html", import.meta.url), "utf8");
+  const manifest = JSON.parse(await readFile(new URL("../public/manifest.webmanifest", import.meta.url), "utf8"));
+  assert.equal(manifest.name, "Ателье Анны");
+  assert.equal(manifest.short_name, "Ателье Анны");
+  assert.equal(manifest.start_url, "./");
+  assert.equal(manifest.scope, "./");
+  assert.equal(manifest.display, "standalone");
+  assert.deepEqual(manifest.icons.map((icon) => icon.sizes), ["192x192", "512x512", "512x512"]);
+  assert.match(html, /rel="manifest" href="\.\/manifest\.webmanifest"/);
+  assert.match(html, /apple-mobile-web-app-capable" content="yes"/);
+  assert.match(html, /apple-touch-icon" sizes="180x180"/);
+
+  for (const [filename, expectedSize] of [["apple-touch-icon.png", 180], ["icon-192.png", 192], ["icon-512.png", 512], ["icon-maskable-512.png", 512]]) {
+    const png = await readFile(new URL(`../public/icons/${filename}`, import.meta.url));
+    assert.deepEqual([...png.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+    assert.equal(png.readUInt32BE(16), expectedSize);
+    assert.equal(png.readUInt32BE(20), expectedSize);
+  }
+});
+
+test("provides contextual install and notification controls", async () => {
+  const game = await readFile(new URL("../app/Game.tsx", import.meta.url), "utf8");
+  const client = await readFile(new URL("../app/pwa-client.ts", import.meta.url), "utf8");
+  assert.match(game, /beforeinstallprompt/);
+  assert.match(game, /Добавить на телефон/);
+  assert.match(game, /Добавь Ателье Анны на экран телефона/);
+  assert.match(game, /Открой игру в Safari/);
+  assert.match(game, /Анна может позвать тебя в ателье/);
+  assert.match(game, /Разрешить уведомления/);
+  assert.match(game, /Не сейчас/);
+  assert.match(client, /Notification\.requestPermission\(\)/);
+  assert.match(client, /getSubscription\(\)/);
+  assert.match(client, /pushManager\.subscribe/);
+  assert.match(client, /api\/push\/subscribe/);
+  assert.match(client, /api\/push\/unsubscribe/);
+  assert.match(client, /credentials: "include"/);
+  assert.doesNotMatch(client, /VAPID_PRIVATE|ownsGame|userId/);
+});
+
+test("subscribes idempotently and unregisters through the scoped push API", async () => {
+  const names = ["window", "document", "navigator", "Notification", "fetch"];
+  const descriptors = new Map(names.map((name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)]));
+  const preferences = new Map();
+  const requests = [];
+  let currentSubscription = null;
+  let subscribeCalls = 0;
+  let unsubscribeCalls = 0;
+  const subscription = {
+    toJSON: () => ({ endpoint: "https://push.example/subscription", keys: { p256dh: "key", auth: "auth" } }),
+    unsubscribe: async () => { unsubscribeCalls += 1; currentSubscription = null; return true; },
+  };
+  const registration = {
+    pushManager: {
+      getSubscription: async () => currentSubscription,
+      subscribe: async () => { subscribeCalls += 1; currentSubscription = subscription; return subscription; },
+    },
+  };
+
+  try {
+    const notification = { requestPermission: async () => "granted" };
+    Object.defineProperty(globalThis, "window", { configurable: true, value: {
+      PushManager: function PushManager() {}, Notification: notification,
+      atob: globalThis.atob,
+      matchMedia: () => ({ matches: false }),
+      localStorage: { getItem: (key) => preferences.get(key) ?? null, setItem: (key, value) => preferences.set(key, value) },
+    } });
+    Object.defineProperty(globalThis, "document", { configurable: true, value: { documentElement: { dataset: { assetPrefix: "./" } }, baseURI: "https://shop.example/games/atelier-anna/" } });
+    Object.defineProperty(globalThis, "navigator", { configurable: true, value: { serviceWorker: {}, language: "ru-RU", userAgent: "Android", platform: "", maxTouchPoints: 5 } });
+    Object.defineProperty(globalThis, "Notification", { configurable: true, value: notification });
+    Object.defineProperty(globalThis, "fetch", { configurable: true, value: async (url, options) => { requests.push({ url, options }); return new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }); } });
+
+    const config = { vapidPublicKey: "A".repeat(43) };
+    await enablePushNotifications(registration, config);
+    await enablePushNotifications(registration, config);
+    assert.equal(subscribeCalls, 1, "an existing browser subscription is reused");
+    assert.equal(requests[0].url, "https://shop.example/games/atelier-anna/api/push/subscribe");
+    assert.equal(requests[0].options.credentials, "include");
+    assert.doesNotMatch(requests[0].options.body, /userId|owner|purchase/i);
+
+    const result = await disablePushNotifications(registration);
+    assert.equal(requests.at(-1).url, "https://shop.example/games/atelier-anna/api/push/unsubscribe");
+    assert.equal(unsubscribeCalls, 1);
+    assert.deepEqual(result, { unsubscribed: true, serverSynced: true });
+    assert.equal(preferences.get("atelier_anna_notifications_v1"), "disabled");
+  } finally {
+    for (const name of names) {
+      const descriptor = descriptors.get(name);
+      if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+      else delete globalThis[name];
+    }
+  }
+});
+
+test("uses a versioned service worker without caching auth or navigation", async () => {
+  const worker = await readFile(new URL("../public/service-worker.js", import.meta.url), "utf8");
+  assert.match(worker, /atelier-anna-static-v/);
+  assert.match(worker, /request\.mode === "navigate"/);
+  assert.match(worker, /api\|auth\|account\|callback\|signin\|signout/);
+  assert.match(worker, /request\.headers\.has\("range"\)/);
+  assert.match(worker, /addEventListener\("push"/);
+  assert.match(worker, /showNotification/);
+  assert.match(worker, /addEventListener\("notificationclick"/);
+  assert.match(worker, /clients\.openWindow/);
+  assert.match(worker, /searchParams\.set\("destination"/);
+  assert.doesNotMatch(worker, /cache\.addAll|localStorage\.ownsGame/);
+});
+
+test("routes notification destinations into existing game states", async () => {
+  const game = await readFile(new URL("../app/Game.tsx", import.meta.url), "utf8");
+  assert.match(game, /searchParams\.get\("destination"\)/);
+  assert.match(game, /destination === "drawing"/);
+  assert.match(game, /\["order", "orders", "match3"\]\.includes\(destination\)/);
+  assert.match(game, /setShowOrderModal\(true\)/);
+  assert.match(game, /history\.replaceState/);
+});
+
+test("hardens the touch viewport and safe areas", async () => {
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  assert.match(css, /overscroll-behavior: none/);
+  assert.match(css, /touch-action: manipulation/);
+  assert.match(css, /env\(safe-area-inset-top\)/);
+  assert.match(css, /env\(safe-area-inset-bottom\)/);
+  assert.match(css, /env\(safe-area-inset-left\)/);
+  assert.match(css, /env\(safe-area-inset-right\)/);
 });
 
 test("adds opt-in game sound effects", async () => {

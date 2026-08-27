@@ -9,6 +9,7 @@ const mimeTypes = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
+  ".webmanifest": "application/manifest+json; charset=utf-8",
   ".mp3": "audio/mpeg",
   ".mp4": "video/mp4",
   ".png": "image/png",
@@ -22,7 +23,27 @@ createServer((request, response) => {
     const requestedPath = resolve(root, `.${pathname}`);
     if (requestedPath !== root && !requestedPath.startsWith(`${root}${sep}`)) throw new Error("Path outside root");
     const filePath = statSync(requestedPath).isDirectory() ? resolve(requestedPath, "index.html") : requestedPath;
-    response.writeHead(200, { "Content-Type": mimeTypes[extname(filePath)] ?? "application/octet-stream", "Cache-Control": "no-store" });
+    const file = statSync(filePath);
+    const range = request.headers.range?.match(/^bytes=(\d*)-(\d*)$/);
+    const cacheControl = filePath.endsWith(`${sep}service-worker.js`) ? "no-cache" : "no-store";
+    const baseHeaders = {
+      "Content-Type": mimeTypes[extname(filePath)] ?? "application/octet-stream",
+      "Cache-Control": cacheControl,
+      "Accept-Ranges": "bytes",
+    };
+    if (range) {
+      const start = range[1] ? Number(range[1]) : 0;
+      const end = range[2] ? Math.min(Number(range[2]), file.size - 1) : file.size - 1;
+      if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || start > end || start >= file.size) {
+        response.writeHead(416, { "Content-Range": `bytes */${file.size}` });
+        return response.end();
+      }
+      response.writeHead(206, { ...baseHeaders, "Content-Range": `bytes ${start}-${end}/${file.size}`, "Content-Length": end - start + 1 });
+      if (request.method === "HEAD") return response.end();
+      return createReadStream(filePath, { start, end }).pipe(response);
+    }
+    response.writeHead(200, { ...baseHeaders, "Content-Length": file.size });
+    if (request.method === "HEAD") return response.end();
     createReadStream(filePath).pipe(response);
   } catch {
     response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
