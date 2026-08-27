@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { GAME_SAVE_KEY, parseGameSave, RELEASE_VERSION } from "../app/game-save.ts";
 
 async function render() {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
@@ -22,10 +23,28 @@ test("renders the Anna Atelier game", async () => {
   const html = await response.text();
   assert.match(html, /<title>Ателье Анны — уютная игра<\/title>/i);
   assert.match(html, /Ателье Анны/);
-  assert.match(html, /Главный экран ателье/);
-  assert.match(html, /Новый заказ: Летнее платье/);
-  assert.match(html, /Скука/);
+  assert.match(html, /Загружаем мастерскую/);
   assert.doesNotMatch(html, /codex-preview|SkeletonPreview|Your site is taking shape/i);
+});
+
+test("uses the versioned, validated browser save schema", async () => {
+  assert.equal(RELEASE_VERSION, "1.0.0");
+  assert.equal(GAME_SAVE_KEY, "atelier_anna_save_v1");
+  assert.equal(parseGameSave("not-json"), null);
+  assert.equal(parseGameSave(JSON.stringify({ schemaVersion: 0, state: {} })), null);
+  assert.equal(parseGameSave(JSON.stringify({ schemaVersion: 1, state: { board: [0] } })), null);
+
+  const valid = parseGameSave(JSON.stringify({
+    schemaVersion: 1,
+    state: {
+      board: Array(49).fill(2), score: 420, moves: 18, coins: 91, orderIndex: 1,
+      activeOrder: true, orderProgress: 7, orderReady: false, hunger: 72, energy: 61,
+      boredom: 54, drawingSketchIndex: 2, completedSketches: [0, 2, 2, 99], soundEnabled: true,
+    },
+  }));
+  assert.ok(valid);
+  assert.equal(valid.coins, 91);
+  assert.deepEqual(valid.completedSketches, [0, 2]);
 });
 
 test("connects the complete order flow", async () => {
@@ -196,12 +215,36 @@ test("keeps each Anna video ready for streaming playback", async () => {
 
 test("plays the supplied rest animation without moving the care controls", async () => {
   const game = await readFile(new URL("../app/Game.tsx", import.meta.url), "utf8");
-  assert.match(game, /temporaryState.*"resting"/);
+  assert.match(game, /className="rest-cutscene"/);
   assert.match(game, /assets\/videos\/anna-resting\.mp4/);
-  assert.match(game, /setTemporaryState\("resting"\)/);
+  assert.match(game, /restCutsceneActiveRef\.current/);
+  assert.match(game, /onEnded=\{\(\) => finishRestCutscene\(\)\}/);
+  assert.match(game, /<video autoPlay muted playsInline preload="auto"/);
+  assert.doesNotMatch(game, /<video autoPlay loop muted playsInline[^>]*anna-resting/);
   assert.doesNotMatch(game, /className="celebration-banner"/);
   assert.doesNotMatch(game, /celebrating \? "Радуется"/);
   assert.match(game, /orderReady \? "Готово" : "Шить"/);
+});
+
+test("resets every persisted game field for a new game", async () => {
+  const game = await readFile(new URL("../app/Game.tsx", import.meta.url), "utf8");
+  assert.match(game, /function resetGame\(\)/);
+  assert.match(game, /clearGameSave\(window\.localStorage\)/);
+  assert.match(game, /setCoins\(36\)/);
+  assert.match(game, /setOrderIndex\(0\)/);
+  assert.match(game, /setCompletedSketches\(\[\]\)/);
+  assert.match(game, /Начать новую игру\? Текущий прогресс будет удалён/);
+});
+
+test("builds a movable release with a polished loading state", async () => {
+  const html = await readFile(new URL("../github-pages/index.html", import.meta.url), "utf8");
+  const config = await readFile(new URL("../vite.pages.config.ts", import.meta.url), "utf8");
+  const packageData = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+  assert.equal(packageData.version, "1.0.0");
+  assert.match(html, /data-asset-prefix="\.\/"/);
+  assert.match(html, /Загружаем мастерскую/);
+  assert.match(html, /content="1\.0\.0"/);
+  assert.match(config, /base: "\.\/"/);
 });
 
 test("adds opt-in game sound effects", async () => {

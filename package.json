@@ -1,6 +1,6 @@
 {
   "name": "anna-atelier-game",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "engines": {
     "node": ">=22.13.0"
@@ -10,6 +10,8 @@
     "build": "vinext build",
     "postbuild": "node scripts/clean-server-assets.mjs",
     "build:pages": "vite build --config vite.pages.config.ts",
+    "build:release": "npm run build:pages && node scripts/prepare-release.mjs",
+    "serve:release": "node scripts/serve-static.mjs builds/atelier_anna_web_v1.0.0 4173",
     "start": "vinext start",
     "test": "vinext build && node --test tests/rendered-html.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
