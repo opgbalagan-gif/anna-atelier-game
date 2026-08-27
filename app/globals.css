@@ -1180,22 +1180,6 @@ h1 {
 .care-actions .drawing-action { border-color: rgba(47, 119, 115, 0.34); background: #e6f0eb; }
 .care-actions .drawing-action span { color: var(--teal); }
 
-.celebration-banner {
-  display: grid;
-  margin: 12px 0 2px;
-  padding: 12px 14px;
-  grid-template-columns: auto 1fr;
-  gap: 2px 9px;
-  border: 1px solid rgba(47, 119, 115, 0.23);
-  border-radius: 15px;
-  color: var(--teal);
-  background: #e7f1eb;
-  animation: celebration-pop 450ms ease both;
-}
-.celebration-banner > span { grid-row: span 2; align-self: center; font-size: 22px; }
-.celebration-banner strong { font-size: 11px; }
-.celebration-banner small { color: #63827c; font-size: 8px; }
-
 .screen-topline {
   display: flex;
   min-height: 68px;
@@ -1237,12 +1221,14 @@ h1 {
   top: 50%;
   left: 50%;
   display: grid;
-  width: min(390px, calc(100% - 42px));
-  min-height: 190px;
+  box-sizing: border-box;
+  width: min(340px, calc(100% - 28px));
+  max-width: calc(100% - 28px);
+  min-height: 168px;
   place-items: center;
   align-content: center;
   gap: 8px;
-  padding: 24px;
+  padding: 22px;
   border: 1px solid rgba(47, 119, 115, 0.3);
   border-radius: 28px;
   color: #315f5a;
@@ -1250,7 +1236,7 @@ h1 {
   background: rgba(255, 252, 242, 0.96);
   box-shadow: 0 24px 70px rgba(54, 37, 31, 0.3);
   transform: translate(-50%, -50%);
-  animation: celebration-pop 320ms ease both;
+  animation: order-ready-pop 320ms ease both;
   backdrop-filter: blur(10px);
 }
 .order-ready-overlay > span { display: grid; width: 58px; height: 58px; place-items: center; border-radius: 50%; color: #fff; background: var(--teal); font-size: 28px; }
@@ -1407,6 +1393,7 @@ h1 {
 @keyframes modal-letter { from { opacity: 0; transform: translateY(20px) rotate(-1deg) scale(0.97); } to { opacity: 1; transform: translateY(0) rotate(0) scale(1); } }
 @keyframes order-arrive { from { opacity: 0; transform: translate(34px, -18px) rotate(1deg) scale(0.96); } to { opacity: 1; transform: translate(0) rotate(0) scale(1); } }
 @keyframes celebration-pop { 0% { opacity: 0; transform: scale(0.92); } 65% { transform: scale(1.03); } 100% { opacity: 1; transform: scale(1); } }
+@keyframes order-ready-pop { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0.92); } 65% { transform: translate(-50%, -50%) scale(1.03); } 100% { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
 
 @media (max-width: 1120px) {
   .game-shell {
@@ -1946,12 +1933,15 @@ h1 {
   }
 
   .order-ready-overlay {
-    min-height: 160px;
-    border-radius: 23px;
+    width: min(280px, calc(100% - 20px));
+    max-width: calc(100% - 20px);
+    min-height: 132px;
+    padding: 16px 14px;
+    border-radius: 20px;
   }
 
   .order-ready-overlay strong {
-    font-size: 25px;
+    font-size: 23px;
   }
 }
 

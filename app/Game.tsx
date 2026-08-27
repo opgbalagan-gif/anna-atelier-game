@@ -45,6 +45,7 @@ type DrawingPhase = "trace" | "color" | "stamp" | "done";
 type DrawingColor = (typeof DRAWING_COLORS)[number]["id"];
 type SoundEffect = "tap" | "coin" | "success" | "rest" | "alert" | "fail" | "welcome";
 type AnnaVisual = { id: string; video: string; status: string; icon: string; alt: string };
+type ColoringRegionMap = { labels: Int32Array; sizes: number[]; width: number; height: number };
 
 type Board = number[];
 type Screen = "home" | "match3" | "drawing";
@@ -130,6 +131,52 @@ function areNeighbours(first: number, second: number) {
   return Math.abs(firstRow - secondRow) + Math.abs(firstColumn - secondColumn) === 1;
 }
 
+function createColoringRegionMap(source: ImageData): ColoringRegionMap {
+  const { width, height, data } = source;
+  const total = width * height;
+  const labels = new Int32Array(total);
+  const paintable = new Uint8Array(total);
+  const queue = new Int32Array(total);
+  const sizes = [0];
+
+  for (let index = 0; index < total; index += 1) {
+    const offset = index * 4;
+    const luminance = data[offset] * 0.299 + data[offset + 1] * 0.587 + data[offset + 2] * 0.114;
+    paintable[index] = data[offset + 3] > 0 && luminance > 176 ? 1 : 0;
+  }
+
+  let nextLabel = 0;
+  for (let start = 0; start < total; start += 1) {
+    if (!paintable[start] || labels[start]) continue;
+    nextLabel += 1;
+    let head = 0;
+    let tail = 0;
+    let size = 0;
+    queue[tail] = start;
+    tail += 1;
+    labels[start] = nextLabel;
+
+    while (head < tail) {
+      const index = queue[head];
+      head += 1;
+      size += 1;
+      const x = index % width;
+      const candidates = [index - width, index + width];
+      if (x > 0) candidates.push(index - 1);
+      if (x < width - 1) candidates.push(index + 1);
+      candidates.forEach((candidate) => {
+        if (candidate < 0 || candidate >= total || !paintable[candidate] || labels[candidate]) return;
+        labels[candidate] = nextLabel;
+        queue[tail] = candidate;
+        tail += 1;
+      });
+    }
+    sizes[nextLabel] = size;
+  }
+
+  return { labels, sizes, width, height };
+}
+
 function TileSprite({ type, small = false }: { type: number; small?: boolean }) {
   return <span className={`tile-sprite tile-sprite-${type}${small ? " tile-sprite-small" : ""}`} style={{ backgroundImage: `url("${assetPath("assets/sewing-tiles.png")}")` }} aria-hidden="true" />;
 }
@@ -159,14 +206,17 @@ export default function Game() {
   const [hunger, setHunger] = useState(76);
   const [energy, setEnergy] = useState(83);
   const [boredom, setBoredom] = useState(28);
-  const [temporaryState, setTemporaryState] = useState<"eating" | null>(null);
+  const [temporaryState, setTemporaryState] = useState<"eating" | "resting" | null>(null);
   const [toast, setToast] = useState("В ателье пришёл новый заказ");
   const [soundEnabled, setSoundEnabled] = useState(false);
   const soundEnabledRef = useRef(false);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const soundtrackRef = useRef<HTMLAudioElement | null>(null);
+  const temporaryStateTimer = useRef<number | null>(null);
   const drawingCanvas = useRef<HTMLCanvasElement | null>(null);
   const coloringCanvas = useRef<HTMLCanvasElement | null>(null);
   const coloringSource = useRef<ImageData | null>(null);
+  const coloringRegions = useRef<ColoringRegionMap | null>(null);
   const drawingPointer = useRef<{ pointerId: number; x: number; y: number } | null>(null);
   const drawingDistance = useRef(0);
   const [drawingSketchIndex, setDrawingSketchIndex] = useState(0);
@@ -225,8 +275,13 @@ export default function Game() {
     const next = !soundEnabled;
     soundEnabledRef.current = next;
     setSoundEnabled(next);
-    if (next) playSound("welcome", true);
-    else if (audioContextRef.current?.state === "running") void audioContextRef.current.suspend();
+    if (next) {
+      playSound("welcome", true);
+      if (soundtrackRef.current) void soundtrackRef.current.play().catch(() => undefined);
+    } else {
+      soundtrackRef.current?.pause();
+      if (audioContextRef.current?.state === "running") void audioContextRef.current.suspend();
+    }
   }
 
   const finishCelebration = useCallback(() => {
@@ -243,6 +298,7 @@ export default function Game() {
 
   const annaState = useMemo(() => {
     if (temporaryState === "eating") return "Анна устроила уютный перекус";
+    if (temporaryState === "resting") return "Анна отдыхает и набирается сил";
     if (celebrating) return "Анна очень довольна проделанной работой!";
     if (energy <= 45) return "Анна устала — устройте небольшой отдых";
     if (hunger <= 45) return "Анна проголодалась — пора перекусить";
@@ -254,6 +310,7 @@ export default function Game() {
 
   const annaVisual = useMemo<AnnaVisual>(() => {
     if (temporaryState === "eating") return { id: "eating", video: assetPath("assets/videos/anna-eating.mp4"), status: "Перекусывает", icon: "☕", alt: "Анна ест круассан и пьёт чай" };
+    if (temporaryState === "resting") return { id: "resting", video: assetPath("assets/videos/anna-resting.mp4"), status: "Отдыхает", icon: "☁", alt: "Анна отдыхает в уютном ателье" };
     if (celebrating) return { id: "celebrates", video: assetPath("assets/videos/anna-celebrates.mp4"), status: "Радуется", icon: "✦", alt: "Анна радуется готовому заказу" };
     if (energy <= 45) return { id: "tired", video: assetPath("assets/videos/anna-tired.mp4"), status: "Устала", icon: "z", alt: "Уставшая Анна прикрывает зевок" };
     if (hunger <= 45) return { id: "hungry", video: assetPath("assets/videos/anna-hungry.mp4"), status: "Проголодалась", icon: "⌁", alt: "Проголодавшаяся Анна сделала перерыв" };
@@ -301,9 +358,20 @@ export default function Game() {
     return () => window.clearInterval(timer);
   }, []);
 
-  useEffect(() => () => {
-    const context = audioContextRef.current;
-    if (context && context.state !== "closed") void context.close();
+  useEffect(() => {
+    const soundtrack = new Audio(assetPath("assets/audio/anna-atelier-theme.mp3"));
+    soundtrack.loop = true;
+    soundtrack.preload = "auto";
+    soundtrack.volume = 0.24;
+    soundtrackRef.current = soundtrack;
+    return () => {
+      soundtrack.pause();
+      soundtrack.removeAttribute("src");
+      soundtrackRef.current = null;
+      const context = audioContextRef.current;
+      if (context && context.state !== "closed") void context.close();
+      if (temporaryStateTimer.current !== null) window.clearTimeout(temporaryStateTimer.current);
+    };
   }, []);
 
   useEffect(() => {
@@ -336,7 +404,9 @@ export default function Game() {
       if (!context) return;
       context.clearRect(0, 0, size, size);
       context.drawImage(image, 0, 0, size, size);
-      coloringSource.current = context.getImageData(0, 0, size, size);
+      const source = context.getImageData(0, 0, size, size);
+      coloringSource.current = source;
+      coloringRegions.current = createColoringRegionMap(source);
     };
     image.src = assetPath(DRAWING_SKETCHES[drawingSketchIndex].asset);
     return () => { image.onload = null; };
@@ -445,8 +515,18 @@ export default function Game() {
     if (coins < cost) { playSound("fail"); return setToast("Нужно ещё немного монет"); }
     playSound(kind === "food" ? "coin" : "rest");
     setCoins((value) => value - cost);
-    if (kind === "food") { setHunger((value) => Math.min(100, value + 22)); setTemporaryState("eating"); window.setTimeout(() => setTemporaryState(null), 4200); }
-    else setEnergy((value) => Math.min(100, value + 20));
+    if (temporaryStateTimer.current !== null) window.clearTimeout(temporaryStateTimer.current);
+    if (kind === "food") {
+      setHunger((value) => Math.min(100, value + 22));
+      setTemporaryState("eating");
+    } else {
+      setEnergy((value) => Math.min(100, value + 20));
+      setTemporaryState("resting");
+    }
+    temporaryStateTimer.current = window.setTimeout(() => {
+      setTemporaryState(null);
+      temporaryStateTimer.current = null;
+    }, 4200);
     setToast(kind === "food" ? "Чай и круассан готовы" : "Небольшая передышка");
   }
 
@@ -521,6 +601,7 @@ export default function Game() {
     drawingPointer.current = null;
     drawingDistance.current = 0;
     coloringSource.current = null;
+    coloringRegions.current = null;
     setPaintedZones([]);
     setDrawingProgress(0);
     setDrawingFeedback("Начните вести карандаш по контуру");
@@ -543,8 +624,9 @@ export default function Game() {
     if (drawingPhase !== "color") return;
     const canvas = event.currentTarget;
     const source = coloringSource.current;
+    const regionMap = coloringRegions.current;
     const context = canvas.getContext("2d", { willReadFrequently: true });
-    if (!source || !context || !canvas.width || !canvas.height) return;
+    if (!source || !regionMap || !context || !canvas.width || !canvas.height) return;
 
     const bounds = canvas.getBoundingClientRect();
     const rawX = Math.floor((event.clientX - bounds.left) * canvas.width / bounds.width);
@@ -553,65 +635,41 @@ export default function Game() {
     const startY = Math.max(0, Math.min(canvas.height - 1, rawY));
     const total = canvas.width * canvas.height;
     const sourcePixels = source.data;
-    const isPaintable = (index: number) => {
-      const offset = index * 4;
-      const luminance = sourcePixels[offset] * 0.299 + sourcePixels[offset + 1] * 0.587 + sourcePixels[offset + 2] * 0.114;
-      return sourcePixels[offset + 3] > 0 && luminance > 176;
-    };
-
-    let startIndex = startY * canvas.width + startX;
-    if (!isPaintable(startIndex)) {
-      let nearest = -1;
-      for (let radius = 1; radius <= 18 && nearest < 0; radius += 1) {
-        for (let offsetY = -radius; offsetY <= radius && nearest < 0; offsetY += 1) {
-          for (let offsetX = -radius; offsetX <= radius; offsetX += 1) {
-            if (Math.abs(offsetX) !== radius && Math.abs(offsetY) !== radius) continue;
-            const x = startX + offsetX;
-            const y = startY + offsetY;
-            if (x < 0 || y < 0 || x >= canvas.width || y >= canvas.height) continue;
-            const candidate = y * canvas.width + x;
-            if (isPaintable(candidate)) { nearest = candidate; break; }
-          }
+    const directRegion = regionMap.labels[startY * canvas.width + startX];
+    const directRegionSize = regionMap.sizes[directRegion] ?? 0;
+    let selectedRegion = directRegionSize >= 8 && directRegionSize <= total * 0.45 ? directRegion : 0;
+    const searchRadius = 26;
+    const nearbyRegions = new Map<number, number>();
+    if (!selectedRegion) {
+      for (let offsetY = -searchRadius; offsetY <= searchRadius; offsetY += 1) {
+        for (let offsetX = -searchRadius; offsetX <= searchRadius; offsetX += 1) {
+          const distanceSquared = offsetX * offsetX + offsetY * offsetY;
+          if (distanceSquared > searchRadius * searchRadius) continue;
+          const x = startX + offsetX;
+          const y = startY + offsetY;
+          if (x < 0 || y < 0 || x >= canvas.width || y >= canvas.height) continue;
+          const label = regionMap.labels[y * canvas.width + x];
+          const regionSize = regionMap.sizes[label] ?? 0;
+          if (!label || regionSize < 8 || regionSize > total * 0.45) continue;
+          const distance = Math.sqrt(distanceSquared);
+          const score = distance + Math.sqrt(regionSize) * 0.07;
+          const currentScore = nearbyRegions.get(label);
+          if (currentScore === undefined || score < currentScore) nearbyRegions.set(label, score);
         }
       }
-      if (nearest < 0) {
-        playSound("fail");
-        setDrawingFeedback("Нажмите внутри светлой области рисунка");
-        return;
-      }
-      startIndex = nearest;
-    }
 
-    const visited = new Uint8Array(total);
-    const queue = new Int32Array(total);
-    const region: number[] = [];
-    let head = 0;
-    let tail = 0;
-    let regionKey = startIndex;
-    queue[tail] = startIndex;
-    tail += 1;
-    visited[startIndex] = 1;
-
-    while (head < tail) {
-      const index = queue[head];
-      head += 1;
-      region.push(index);
-      if (index < regionKey) regionKey = index;
-      const x = index % canvas.width;
-      const candidates = [index - canvas.width, index + canvas.width];
-      if (x > 0) candidates.push(index - 1);
-      if (x < canvas.width - 1) candidates.push(index + 1);
-      candidates.forEach((candidate) => {
-        if (candidate < 0 || candidate >= total || visited[candidate] || !isPaintable(candidate)) return;
-        visited[candidate] = 1;
-        queue[tail] = candidate;
-        tail += 1;
+      let selectedScore = Number.POSITIVE_INFINITY;
+      nearbyRegions.forEach((score, label) => {
+        if (score < selectedScore) {
+          selectedRegion = label;
+          selectedScore = score;
+        }
       });
     }
 
-    if (region.length < 48) {
+    if (!selectedRegion) {
       playSound("fail");
-      setDrawingFeedback("Выберите более крупную часть рисунка");
+      setDrawingFeedback("Нажмите внутри детали рисунка");
       return;
     }
 
@@ -620,14 +678,15 @@ export default function Game() {
     const green = Number.parseInt(palette.value.slice(3, 5), 16);
     const blue = Number.parseInt(palette.value.slice(5, 7), 16);
     const painted = context.getImageData(0, 0, canvas.width, canvas.height);
-    region.forEach((index) => {
+    for (let index = 0; index < total; index += 1) {
+      if (regionMap.labels[index] !== selectedRegion) continue;
       const offset = index * 4;
       painted.data[offset] = Math.round(red * 0.68 + sourcePixels[offset] * 0.32);
       painted.data[offset + 1] = Math.round(green * 0.68 + sourcePixels[offset + 1] * 0.32);
       painted.data[offset + 2] = Math.round(blue * 0.68 + sourcePixels[offset + 2] * 0.32);
-    });
+    }
     context.putImageData(painted, 0, 0);
-    const zoneId = String(regionKey);
+    const zoneId = String(selectedRegion);
     const isNewZone = !paintedZones.includes(zoneId);
     setPaintedZones((zones) => zones.includes(zoneId) ? zones : [...zones, zoneId]);
     playSound("tap");
@@ -661,7 +720,7 @@ export default function Game() {
 
   const orderInboxCard = showOrderModal && !activeOrder && hasAvailableOrder ? <section className="order-modal order-inbox-card" role="dialog" aria-modal="false" aria-labelledby="new-order-title"><button type="button" className="modal-close" aria-label="Закрыть письмо" onClick={() => setShowOrderModal(false)}>×</button><div className="letter-stamp" aria-hidden="true">✿</div><p className="eyebrow">новый заказ</p><h2 id="new-order-title">{order.title}</h2><div className="modal-client"><span>{order.client.slice(0, 1)}</span><div><small>Пишет</small><strong>{order.client}</strong></div></div><p className="order-letter">«{order.note}. Очень надеюсь на ваше мастерство, Анна!»</p><div className="modal-order-details"><div><span>Материал</span><strong>{TILE_TYPES[order.tile].short} · {order.goal}</strong></div><div><span>Срок</span><strong>{order.time}</strong></div><div><span>Награда</span><strong>{order.reward} ●</strong></div></div><div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setShowOrderModal(false)}>Не сейчас</button><button type="button" className="primary-button" onClick={acceptOrder}>Принять заказ</button></div></section> : null;
 
-  const annaCard = <aside className="anna-card panel"><div className="character-stage" style={{ backgroundImage: `url("${assetPath("assets/anna-atelier-scene.png")}")` }}><video key={displayedVisual.video} className="scene-image scene-video-current" autoPlay loop={displayedVisual.id !== "celebrates"} muted playsInline preload="auto" aria-label={displayedVisual.alt} onEnded={displayedVisual.id === "celebrates" ? finishCelebration : undefined}><source src={displayedVisual.video} type="video/mp4" /></video>{incomingVisual && <video key={incomingVisual.video} className={`scene-image scene-video-incoming${incomingReady ? " scene-video-ready" : ""}`} autoPlay loop={incomingVisual.id !== "celebrates"} muted playsInline preload="auto" aria-label={incomingVisual.alt} onCanPlay={revealIncomingVideo} onEnded={incomingVisual.id === "celebrates" ? finishCelebration : undefined}><source src={incomingVisual.video} type="video/mp4" /></video>}<div className="stage-glow" />{atelierHud}<button type="button" className={`sound-toggle${soundEnabled ? " sound-on" : ""}`} aria-label={soundEnabled ? "Выключить звук" : "Включить звук"} aria-pressed={soundEnabled} onClick={toggleSound}><span aria-hidden="true">{soundEnabled ? "♫" : "♪"}</span></button>{!activeOrder && hasAvailableOrder ? <button type="button" className="mood-bubble order-alert-bubble" aria-label={`Новый заказ: ${order.title}`} aria-expanded={showOrderModal} onClick={() => { playSound("alert"); setShowOrderModal((value) => !value); }}><span>✉</span><b>!</b></button> : <span className={`mood-bubble${annaVisual.id !== "sewing" ? " boredom-alert" : ""}`} aria-label={`Состояние Анны: ${annaVisual.status}`}>{annaVisual.icon}</span>}</div>{orderInboxCard}<div className="anna-copy"><div className="section-heading compact-heading"><div><p className="eyebrow">хозяйка ателье</p><h2>Анна</h2></div>{completedSketches.length > 0 && <div className="atelier-gallery" aria-label="Готовые картины Анны">{completedSketches.map((index) => <span key={index} title={DRAWING_SKETCHES[index].name} style={{ backgroundImage: `url("${assetPath(DRAWING_SKETCHES[index].asset)}")` }} />)}</div>}<span className="care-score">{averageCare}%</span></div><p className="anna-state">{annaState}</p>{celebrating && <div className="celebration-banner"><span>✦</span><strong>Заказ готов!</strong><small>{toast}</small></div>}<div className="meters"><Meter label="Сытость" value={hunger} tone="coral" /><Meter label="Энергия" value={energy} tone="gold" /><Meter label="Скука" value={boredom} tone="boredom" /></div><div className={`care-actions${drawingUnlocked ? " has-drawing" : ""}`}><button type="button" disabled={celebrating} onClick={() => careForAnna("food")}><span>☕</span><strong>Перекус</strong><small>8 ●</small></button><button type="button" disabled={celebrating} onClick={() => careForAnna("rest")}><span>☁</span><strong>Отдых</strong><small>6 ●</small></button>{activeOrder && <button type="button" onClick={() => careForAnna("sew")} disabled={celebrating || orderReady}><span>✂</span><strong>{celebrating ? "Радуется" : orderReady ? "Готово" : "Шить"}</strong><small>{celebrating ? "подождите" : orderReady ? "награда скоро" : `${orderProgress}/${order.goal}`}</small></button>}{drawingUnlocked && <button type="button" className="drawing-action" disabled={celebrating} onClick={() => { playSound("tap"); setScreen("drawing"); }}><span>✎</span><strong>Рисовать</strong><small>− скука</small></button>}</div></div></aside>;
+  const annaCard = <aside className="anna-card panel"><div className="character-stage" style={{ backgroundImage: `url("${assetPath("assets/anna-atelier-scene.png")}")` }}><video key={displayedVisual.video} className="scene-image scene-video-current" autoPlay loop={displayedVisual.id !== "celebrates"} muted playsInline preload="auto" aria-label={displayedVisual.alt} onEnded={displayedVisual.id === "celebrates" ? finishCelebration : undefined}><source src={displayedVisual.video} type="video/mp4" /></video>{incomingVisual && <video key={incomingVisual.video} className={`scene-image scene-video-incoming${incomingReady ? " scene-video-ready" : ""}`} autoPlay loop={incomingVisual.id !== "celebrates"} muted playsInline preload="auto" aria-label={incomingVisual.alt} onCanPlay={revealIncomingVideo} onEnded={incomingVisual.id === "celebrates" ? finishCelebration : undefined}><source src={incomingVisual.video} type="video/mp4" /></video>}<div className="stage-glow" />{atelierHud}<button type="button" className={`sound-toggle${soundEnabled ? " sound-on" : ""}`} aria-label={soundEnabled ? "Выключить звук" : "Включить звук"} aria-pressed={soundEnabled} onClick={toggleSound}><span aria-hidden="true">{soundEnabled ? "♫" : "♪"}</span></button>{!activeOrder && hasAvailableOrder ? <button type="button" className="mood-bubble order-alert-bubble" aria-label={`Новый заказ: ${order.title}`} aria-expanded={showOrderModal} onClick={() => { playSound("alert"); setShowOrderModal((value) => !value); }}><span>✉</span><b>!</b></button> : <span className={`mood-bubble${annaVisual.id !== "sewing" ? " boredom-alert" : ""}`} aria-label={`Состояние Анны: ${annaVisual.status}`}>{annaVisual.icon}</span>}</div>{orderInboxCard}<div className="anna-copy"><div className="section-heading compact-heading"><div><p className="eyebrow">хозяйка ателье</p><h2>Анна</h2></div>{completedSketches.length > 0 && <div className="atelier-gallery" aria-label="Готовые картины Анны">{completedSketches.map((index) => <span key={index} title={DRAWING_SKETCHES[index].name} style={{ backgroundImage: `url("${assetPath(DRAWING_SKETCHES[index].asset)}")` }} />)}</div>}<span className="care-score">{averageCare}%</span></div><p className="anna-state">{annaState}</p><div className="meters"><Meter label="Сытость" value={hunger} tone="coral" /><Meter label="Энергия" value={energy} tone="gold" /><Meter label="Скука" value={boredom} tone="boredom" /></div><div className={`care-actions${drawingUnlocked ? " has-drawing" : ""}`}><button type="button" disabled={celebrating} onClick={() => careForAnna("food")}><span>☕</span><strong>Перекус</strong><small>8 ●</small></button><button type="button" disabled={celebrating} onClick={() => careForAnna("rest")}><span>☁</span><strong>Отдых</strong><small>6 ●</small></button>{activeOrder && <button type="button" onClick={() => careForAnna("sew")} disabled={celebrating || orderReady}><span>✂</span><strong>{orderReady ? "Готово" : "Шить"}</strong><small>{orderProgress}/{order.goal}</small></button>}{drawingUnlocked && <button type="button" className="drawing-action" disabled={celebrating} onClick={() => { playSound("tap"); setScreen("drawing"); }}><span>✎</span><strong>Рисовать</strong><small>− скука</small></button>}</div></div></aside>;
 
   const homeScreen = <section className="home-layout home-layout-single screen-enter" aria-label="Главный экран ателье">{annaCard}</section>;
 

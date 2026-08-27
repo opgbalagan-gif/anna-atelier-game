@@ -134,6 +134,14 @@ test("keeps the mobile match-three game on one screen", async () => {
   assert.doesNotMatch(css, /:has\(#match-board\)/);
 });
 
+test("keeps the order-ready message centered inside the match-three field", async () => {
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  assert.match(css, /\.board-panel\s*\{[^}]*position: relative/);
+  assert.match(css, /\.order-ready-overlay\s*\{[^}]*left: 50%;[^}]*box-sizing: border-box;[^}]*max-width: calc\(100% - 28px\)/);
+  assert.match(css, /animation: order-ready-pop 320ms ease both/);
+  assert.match(css, /@keyframes order-ready-pop[^}]*translate\(-50%, -50%\)[^}]*\}/);
+});
+
 test("unlocks drawing when Anna is bored", async () => {
   const game = await readFile(new URL("../app/Game.tsx", import.meta.url), "utf8");
   const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
@@ -145,9 +153,12 @@ test("unlocks drawing when Anna is bored", async () => {
   assert.match(game, /Выберите цвет/);
   assert.match(game, /Украсьте картину/);
   assert.match(game, /function paintDrawingZone/);
+  assert.match(game, /function createColoringRegionMap/);
   assert.match(game, /onPointerUp=\{paintDrawingZone\}/);
   assert.match(game, /Раскрасьте элементы/);
   assert.match(game, /paintedZones\.length === 0/);
+  assert.match(game, /directRegionSize >= 8/);
+  assert.match(game, /const searchRadius = 26/);
   assert.match(game, /setBoredom\(5\)/);
   assert.match(css, /\.trace-canvas\s*\{[^}]*touch-action: none/);
   assert.match(css, /\.coloring-canvas\s*\{[^}]*touch-action: manipulation/);
@@ -173,7 +184,7 @@ test("ships generated tracing pictures for the drawing game", async () => {
 });
 
 test("keeps each Anna video ready for streaming playback", async () => {
-  const filenames = ["anna-bored.mp4", "anna-celebrates.mp4", "anna-eating.mp4", "anna-hungry.mp4", "anna-sewing.mp4", "anna-tired.mp4"];
+  const filenames = ["anna-bored.mp4", "anna-celebrates.mp4", "anna-eating.mp4", "anna-hungry.mp4", "anna-resting.mp4", "anna-sewing.mp4", "anna-tired.mp4"];
   for (const filename of filenames) {
     const video = await readFile(new URL(`../public/assets/videos/${filename}`, import.meta.url));
     const moovOffset = video.indexOf(Buffer.from("moov"));
@@ -181,6 +192,16 @@ test("keeps each Anna video ready for streaming playback", async () => {
     assert.ok(moovOffset > 0 && mediaOffset > 0, `${filename} contains MP4 playback boxes`);
     assert.ok(moovOffset < mediaOffset, `${filename} stores its playback index before media data`);
   }
+});
+
+test("plays the supplied rest animation without moving the care controls", async () => {
+  const game = await readFile(new URL("../app/Game.tsx", import.meta.url), "utf8");
+  assert.match(game, /temporaryState.*"resting"/);
+  assert.match(game, /assets\/videos\/anna-resting\.mp4/);
+  assert.match(game, /setTemporaryState\("resting"\)/);
+  assert.doesNotMatch(game, /className="celebration-banner"/);
+  assert.doesNotMatch(game, /celebrating \? "Радуется"/);
+  assert.match(game, /orderReady \? "Готово" : "Шить"/);
 });
 
 test("adds opt-in game sound effects", async () => {
@@ -193,4 +214,16 @@ test("adds opt-in game sound effects", async () => {
   assert.match(game, /playSound\("success"\)/);
   assert.match(game, /playSound\("coin"\)/);
   assert.match(css, /\.sound-toggle\s*\{[^}]*position: absolute/);
+});
+
+test("loops the supplied soundtrack behind the whole game", async () => {
+  const game = await readFile(new URL("../app/Game.tsx", import.meta.url), "utf8");
+  const soundtrack = await readFile(new URL("../public/assets/audio/anna-atelier-theme.mp3", import.meta.url));
+  assert.deepEqual(soundtrack.subarray(0, 3).toString("ascii"), "ID3");
+  assert.ok(soundtrack.length > 1_000_000, "soundtrack contains the supplied audio");
+  assert.match(game, /new Audio\(assetPath\("assets\/audio\/anna-atelier-theme\.mp3"\)\)/);
+  assert.match(game, /soundtrack\.loop = true/);
+  assert.match(game, /soundtrack\.volume = 0\.24/);
+  assert.match(game, /soundtrackRef\.current\.play\(\)/);
+  assert.match(game, /soundtrackRef\.current\?\.pause\(\)/);
 });
