@@ -483,13 +483,14 @@ export default function Game() {
   }, [activeOrder, averageCare, celebrating, drawingUnlocked, energy, hunger, restCutsceneOpen, temporaryState]);
 
   const annaVisual = useMemo<AnnaVisual>(() => {
+    if (restCutsceneOpen) return { id: "resting", video: assetPath("assets/videos/anna-resting.mp4"), status: "Отдыхает", icon: "☁", alt: "Анна отдыхает у моря" };
     if (temporaryState === "eating") return { id: "eating", video: assetPath("assets/videos/anna-eating.mp4"), status: "Перекусывает", icon: "☕", alt: "Анна ест круассан и пьёт чай" };
     if (celebrating) return { id: "celebrates", video: assetPath("assets/videos/anna-celebrates.mp4"), status: "Радуется", icon: "✦", alt: "Анна радуется готовому заказу" };
     if (energy <= 45) return { id: "tired", video: assetPath("assets/videos/anna-tired.mp4"), status: "Устала", icon: "z", alt: "Уставшая Анна прикрывает зевок" };
     if (hunger <= 45) return { id: "hungry", video: assetPath("assets/videos/anna-hungry.mp4"), status: "Проголодалась", icon: "⌁", alt: "Проголодавшаяся Анна сделала перерыв" };
     if (boredom >= DRAWING_UNLOCK_AT) return { id: "bored", video: assetPath("assets/videos/anna-bored.mp4"), status: "Скучает", icon: "…", alt: "Анна скучает у швейной машинки" };
     return { id: "sewing", video: assetPath("assets/videos/anna-sewing.mp4"), status: activeOrder ? "Шьёт заказ" : "В ателье", icon: "♡", alt: "Анна в дневном ателье" };
-  }, [activeOrder, boredom, celebrating, energy, hunger, temporaryState]);
+  }, [activeOrder, boredom, celebrating, energy, hunger, restCutsceneOpen, temporaryState]);
 
   const [displayedVisual, setDisplayedVisual] = useState<AnnaVisual>(annaVisual);
   const [incomingVisual, setIncomingVisual] = useState<AnnaVisual | null>(null);
@@ -1077,36 +1078,23 @@ export default function Game() {
   const annaCard = (
     <aside className="anna-card panel">
       <div className="character-stage" style={{ backgroundImage: `url("${assetPath("assets/anna-atelier-scene.png")}")` }}>
-        <video key={displayedVisual.video} className="scene-image scene-video-current" autoPlay loop={displayedVisual.id !== "celebrates"} muted playsInline preload="auto" aria-label={displayedVisual.alt} onEnded={displayedVisual.id === "celebrates" ? finishCelebration : undefined}><source src={displayedVisual.video} type="video/mp4" /></video>
-        {incomingVisual && <video key={incomingVisual.video} className={`scene-image scene-video-incoming${incomingReady ? " scene-video-ready" : ""}`} autoPlay loop={incomingVisual.id !== "celebrates"} muted playsInline preload="auto" aria-label={incomingVisual.alt} onCanPlay={revealIncomingVideo} onEnded={incomingVisual.id === "celebrates" ? finishCelebration : undefined}><source src={incomingVisual.video} type="video/mp4" /></video>}
-        {restCutsceneOpen && (
-          <div className="stage-rest-cutscene" role="group" aria-label="Отдых Анны у моря">
-            <video autoPlay muted playsInline preload="auto" onEnded={() => finishRestCutscene()} onError={() => finishRestCutscene(true)}>
-              <source src={assetPath("assets/videos/anna-resting.mp4")} type="video/mp4" />
-            </video>
-            <button type="button" onClick={() => finishRestCutscene()} aria-label="Закончить отдых">×</button>
-            <span>Отдых у моря</span>
-          </div>
-        )}
-        {!restCutsceneOpen && (
-          <>
-            <div className="stage-glow" />
-            {atelierHud}
-            <button type="button" className={`sound-toggle${soundEnabled ? " sound-on" : ""}`} aria-label={soundEnabled ? "Выключить звук" : "Включить звук"} aria-pressed={soundEnabled} onClick={toggleSound}><span aria-hidden="true">{soundEnabled ? "♫" : "♪"}</span></button>
-            {!activeOrder && hasAvailableOrder ? <button type="button" className="mood-bubble order-alert-bubble" aria-label={`Новый заказ: ${order.title}`} aria-expanded={showOrderModal} onClick={() => { playSound("alert"); setShowOrderModal((value) => !value); }}><span>✉</span><b>!</b></button> : <span className={`mood-bubble${annaVisual.id !== "sewing" ? " boredom-alert" : ""}`} aria-label={`Состояние Анны: ${annaVisual.status}`}>{annaVisual.icon}</span>}
-            {(showInstallAction || showPushAction) && <div className="pwa-stage-actions">
-              {showInstallAction && <button type="button" className="install-game-button" disabled={pwaActionBusy} onClick={() => void requestInstallation()}><span aria-hidden="true">↧</span>Добавить на телефон</button>}
-              {showPushAction && <button type="button" className={`notification-game-button${pushEnabled ? " notification-enabled" : ""}`} aria-label={pushEnabled ? "Настройки уведомлений, включены" : "Настройки уведомлений"} aria-pressed={pushEnabled} onClick={openPushPreferences}><span aria-hidden="true">♢</span><b>Уведомления</b></button>}
-            </div>}
-          </>
-        )}
+        <video key={displayedVisual.video} className="scene-image scene-video-current" autoPlay loop={displayedVisual.id !== "celebrates" && displayedVisual.id !== "resting"} muted playsInline preload="auto" aria-label={displayedVisual.alt} onEnded={displayedVisual.id === "celebrates" ? finishCelebration : displayedVisual.id === "resting" ? () => finishRestCutscene() : undefined} onError={displayedVisual.id === "resting" ? () => finishRestCutscene(true) : undefined}><source src={displayedVisual.video} type="video/mp4" /></video>
+        {incomingVisual && <video key={incomingVisual.video} className={`scene-image scene-video-incoming${incomingReady ? " scene-video-ready" : ""}`} autoPlay loop={incomingVisual.id !== "celebrates" && incomingVisual.id !== "resting"} muted playsInline preload="auto" aria-label={incomingVisual.alt} onCanPlay={revealIncomingVideo} onEnded={incomingVisual.id === "celebrates" ? finishCelebration : incomingVisual.id === "resting" ? () => finishRestCutscene() : undefined} onError={incomingVisual.id === "resting" ? () => finishRestCutscene(true) : undefined}><source src={incomingVisual.video} type="video/mp4" /></video>}
+        <div className="stage-glow" />
+        {atelierHud}
+        <button type="button" className={`sound-toggle${soundEnabled ? " sound-on" : ""}`} aria-label={soundEnabled ? "Выключить звук" : "Включить звук"} aria-pressed={soundEnabled} onClick={toggleSound}><span aria-hidden="true">{soundEnabled ? "♫" : "♪"}</span></button>
+        {!activeOrder && hasAvailableOrder ? <button type="button" className="mood-bubble order-alert-bubble" aria-label={`Новый заказ: ${order.title}`} aria-expanded={showOrderModal} onClick={() => { playSound("alert"); setShowOrderModal((value) => !value); }}><span>✉</span><b>!</b></button> : <span className={`mood-bubble${annaVisual.id !== "sewing" ? " boredom-alert" : ""}`} aria-label={`Состояние Анны: ${annaVisual.status}`}>{annaVisual.icon}</span>}
+        {(showInstallAction || showPushAction) && <div className="pwa-stage-actions">
+          {showInstallAction && <button type="button" className="install-game-button" disabled={pwaActionBusy} onClick={() => void requestInstallation()}><span aria-hidden="true">↧</span>Добавить на телефон</button>}
+          {showPushAction && <button type="button" className={`notification-game-button${pushEnabled ? " notification-enabled" : ""}`} aria-label={pushEnabled ? "Настройки уведомлений, включены" : "Настройки уведомлений"} aria-pressed={pushEnabled} onClick={openPushPreferences}><span aria-hidden="true">♢</span><b>Уведомления</b></button>}
+        </div>}
       </div>
       {orderInboxCard}
       <div className="anna-copy">
         <div className="section-heading compact-heading"><div><p className="eyebrow">хозяйка ателье</p><h2>Анна</h2></div>{completedSketches.length > 0 && <div className="atelier-gallery" aria-label="Готовые картины Анны">{completedSketches.map((index) => <span key={index} title={DRAWING_SKETCHES[index].name} style={{ backgroundImage: `url("${assetPath(DRAWING_SKETCHES[index].asset)}")` }} />)}</div>}<span className="care-score">{averageCare}%</span></div>
         <p className="anna-state">{annaState}</p>
         <div className="meters"><Meter label="Сытость" value={hunger} tone="coral" /><Meter label="Энергия" value={energy} tone="gold" /><Meter label="Скука" value={boredom} tone="boredom" /></div>
-        <div className={`care-actions${drawingUnlocked ? " has-drawing" : ""}`}><button type="button" disabled={celebrating} onClick={() => careForAnna("food")}><span>☕</span><strong>Перекус</strong><small>8 ●</small></button><button type="button" disabled={celebrating || restCutsceneOpen} onClick={() => careForAnna("rest")}><span>☁</span><strong>Отдых</strong><small>6 ●</small></button>{activeOrder && <button type="button" onClick={() => careForAnna("sew")} disabled={celebrating || orderReady}><span>✂</span><strong>{orderReady ? "Готово" : "Шить"}</strong><small>{orderProgress}/{order.goal}</small></button>}{drawingUnlocked && <button type="button" className="drawing-action" disabled={celebrating} onClick={() => { playSound("tap"); setScreen("drawing"); }}><span>✎</span><strong>Рисовать</strong><small>− скука</small></button>}</div>
+        <div className={`care-actions${drawingUnlocked ? " has-drawing" : ""}`}><button type="button" disabled={celebrating || restCutsceneOpen} onClick={() => careForAnna("food")}><span>☕</span><strong>Перекус</strong><small>8 ●</small></button><button type="button" disabled={celebrating || restCutsceneOpen} onClick={() => careForAnna("rest")}><span>☁</span><strong>Отдых</strong><small>6 ●</small></button>{activeOrder && <button type="button" onClick={() => careForAnna("sew")} disabled={celebrating || orderReady || restCutsceneOpen}><span>✂</span><strong>{orderReady ? "Готово" : "Шить"}</strong><small>{orderProgress}/{order.goal}</small></button>}{drawingUnlocked && <button type="button" className="drawing-action" disabled={celebrating || restCutsceneOpen} onClick={() => { playSound("tap"); setScreen("drawing"); }}><span>✎</span><strong>Рисовать</strong><small>− скука</small></button>}</div>
       </div>
     </aside>
   );

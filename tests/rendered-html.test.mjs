@@ -214,15 +214,18 @@ test("keeps each Anna video ready for streaming playback", async () => {
   }
 });
 
-test("plays the supplied rest animation without moving the care controls", async () => {
+test("plays the supplied rest animation through the same stage player as every Anna state", async () => {
   const game = await readFile(new URL("../app/Game.tsx", import.meta.url), "utf8");
-  assert.match(game, /className="stage-rest-cutscene"/);
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  assert.match(game, /id: "resting", video: assetPath\("assets\/videos\/anna-resting\.mp4"\)/);
   assert.match(game, /assets\/videos\/anna-resting\.mp4/);
   assert.match(game, /restCutsceneActiveRef\.current/);
-  assert.match(game, /onEnded=\{\(\) => finishRestCutscene\(\)\}/);
-  assert.match(game, /<video autoPlay muted playsInline preload="auto"/);
-  assert.doesNotMatch(game, /className="rest-cutscene"|aria-label="Отдых Анны у моря"[^>]*aria-modal="true"/);
-  assert.doesNotMatch(game, /<video autoPlay loop muted playsInline[^>]*anna-resting/);
+  assert.match(game, /className="scene-image scene-video-current"/);
+  assert.match(game, /displayedVisual\.id !== "celebrates" && displayedVisual\.id !== "resting"/);
+  assert.match(game, /displayedVisual\.id === "resting" \? \(\) => finishRestCutscene\(\)/);
+  assert.doesNotMatch(game, /className="(?:stage-)?rest-cutscene"|aria-label="Отдых Анны у моря"/);
+  assert.doesNotMatch(css, /\.stage-rest-cutscene/);
+  assert.match(css, /\.character-stage \.scene-image\s*\{[^}]*object-fit: cover/);
   assert.doesNotMatch(game, /className="celebration-banner"/);
   assert.doesNotMatch(game, /celebrating \? "Радуется"/);
   assert.match(game, /orderReady \? "Готово" : "Шить"/);
