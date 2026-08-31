@@ -312,6 +312,8 @@ test("builds a movable release with an immediate artwork splash", async () => {
   assert.match(html, /<img class="splash-art" src="\.\/assets\/loading\/atelier-anna-splash\.png"[^>]*loading="eager"[^>]*fetchpriority="high"/);
   assert.match(html, /<strong>Открываем ателье…<\/strong>/);
   assert.match(html, /aria-valuenow="0"/);
+  assert.match(html, /html,body,#root\{[^}]*background:#efe4d4;color:#4e3835/);
+  assert.match(html, /\.splash-screen\{[^}]*color:#fff7e9;background:#3a2116/);
   assert.match(html, /object-fit:cover/);
   assert.match(html, /content="1\.0\.0"/);
   assert.match(config, /base: "\.\/"/);
