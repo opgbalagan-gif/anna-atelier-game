@@ -46,6 +46,35 @@ test("uses the versioned, validated browser save schema", async () => {
   assert.ok(valid);
   assert.equal(valid.coins, 91);
   assert.deepEqual(valid.completedSketches, [0, 2]);
+
+  const lateGame = parseGameSave(JSON.stringify({
+    schemaVersion: 1,
+    state: {
+      board: Array(49).fill(4), score: 14_800, moves: 40, coins: 640, orderIndex: 9,
+      activeOrder: true, orderProgress: 17, orderReady: false, hunger: 80, energy: 74,
+      boredom: 31, drawingSketchIndex: 1, completedSketches: [0, 1, 2], soundEnabled: true,
+    },
+  }));
+  assert.ok(lateGame);
+  assert.equal(lateGame.moves, 40);
+  assert.equal(lateGame.orderIndex, 9);
+  assert.equal(lateGame.activeOrder, true);
+});
+
+test("ships ten progressively harder atelier orders", async () => {
+  const game = await readFile(new URL("../app/Game.tsx", import.meta.url), "utf8");
+  const ordersStart = game.indexOf("const ORDERS = [");
+  const ordersEnd = game.indexOf("] as const;", ordersStart);
+  const orders = game.slice(ordersStart, ordersEnd);
+  assert.equal((orders.match(/\{ client:/g) ?? []).length, 10);
+  assert.match(orders, /Платье для зимнего бала/);
+  assert.match(orders, /Костюмы для спектакля/);
+  assert.match(orders, /Морской китель/);
+  assert.match(orders, /Фартуки для флористов/);
+  assert.match(orders, /Наряд для путешествия/);
+  assert.match(orders, /Костюмы для оперы/);
+  assert.match(orders, /Платье для коронации/);
+  for (let tile = 0; tile < 6; tile += 1) assert.match(orders, new RegExp(`tile: ${tile}`));
 });
 
 test("connects the complete order flow", async () => {
@@ -154,11 +183,15 @@ test("keeps the mobile match-three game on one screen", async () => {
   assert.doesNotMatch(css, /:has\(#match-board\)/);
 });
 
-test("gives level four more moves and offers a retry when moves run out", async () => {
+test("gives later levels more moves and offers a retry when moves run out", async () => {
   const game = await readFile(new URL("../app/Game.tsx", import.meta.url), "utf8");
   const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
   assert.match(game, /const LEVEL_FOUR_MOVES = 32/);
-  assert.match(game, /return level >= 4 \? LEVEL_FOUR_MOVES : STARTING_MOVES/);
+  assert.match(game, /const LEVEL_SEVEN_MOVES = 36/);
+  assert.match(game, /const LEVEL_TEN_MOVES = 40/);
+  assert.match(game, /if \(level >= 10\) return LEVEL_TEN_MOVES/);
+  assert.match(game, /if \(level >= 7\) return LEVEL_SEVEN_MOVES/);
+  assert.match(game, /if \(level >= 4\) return LEVEL_FOUR_MOVES/);
   assert.match(game, /setMoves\(movesForLevel\(level\)\)/);
   assert.match(game, /const movesFinished = screen === "match3" && activeOrder && !orderReady && !busy && moves <= 0/);
   assert.match(game, /className="moves-finished-overlay" role="dialog" aria-modal="true"/);

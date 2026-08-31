@@ -1,6 +1,8 @@
 export const RELEASE_VERSION = "1.0.0";
 export const GAME_SAVE_KEY = "atelier_anna_save_v1";
 export const GAME_SAVE_SCHEMA_VERSION = 1;
+const MAX_SAVED_MOVES = 40;
+const ORDER_COUNT = 10;
 
 export type GameSaveState = {
   board: number[];
@@ -52,9 +54,9 @@ export function parseGameSave(serialized: string | null): GameSaveState | null {
     if (board.length !== 49 || board.some((tile) => !Number.isInteger(tile) || tile < 0 || tile > 5)) return null;
 
     const score = safeInteger(state.score, 0, 99_999_999);
-    const moves = safeInteger(state.moves, 0, 24);
+    const moves = safeInteger(state.moves, 0, MAX_SAVED_MOVES);
     const coins = safeInteger(state.coins, 0, 99_999_999);
-    const orderIndex = safeInteger(state.orderIndex, 0, 3);
+    const orderIndex = safeInteger(state.orderIndex, 0, ORDER_COUNT);
     const orderProgress = safeInteger(state.orderProgress, 0, 999);
     const hunger = safeNumber(state.hunger, 0, 100);
     const energy = safeNumber(state.energy, 0, 100);
@@ -65,7 +67,7 @@ export function parseGameSave(serialized: string | null): GameSaveState | null {
     const completedSketches = Array.isArray(state.completedSketches)
       ? [...new Set(state.completedSketches.filter((index): index is number => Number.isInteger(index) && index >= 0 && index <= 2))]
       : [];
-    const activeOrder = state.activeOrder === true && orderIndex! < 3;
+    const activeOrder = state.activeOrder === true && orderIndex! < ORDER_COUNT;
 
     return {
       board: [...board],

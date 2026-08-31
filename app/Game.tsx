@@ -21,6 +21,8 @@ import type { DeferredInstallPrompt, PushBackendConfig } from "./pwa-client";
 const BOARD_SIZE = 7;
 const STARTING_MOVES = 24;
 const LEVEL_FOUR_MOVES = 32;
+const LEVEL_SEVEN_MOVES = 36;
+const LEVEL_TEN_MOVES = 40;
 const DRAWING_UNLOCK_AT = 50;
 
 const TILE_TYPES = [
@@ -36,6 +38,13 @@ const ORDERS = [
   { client: "Мадам Роза", title: "Летнее платье", note: "Лёгкое, с карманами и вышивкой", tile: 2, goal: 12, reward: 70, time: "2 дня" },
   { client: "Театр «Лира»", title: "Костюм для премьеры", note: "Бархат, золотая нить и точная посадка", tile: 0, goal: 15, reward: 95, time: "3 дня" },
   { client: "Семья Орловых", title: "Пальто для прогулок", note: "Тёплое, удобное и с яркими пуговицами", tile: 1, goal: 14, reward: 85, time: "4 дня" },
+  { client: "Графиня Вера", title: "Платье для зимнего бала", note: "Мягкий бархат, длинные рукава и жемчужные детали", tile: 4, goal: 16, reward: 110, time: "4 дня" },
+  { client: "Балетная школа", title: "Костюмы для спектакля", note: "Воздушные юбки и аккуратная отделка для юных балерин", tile: 5, goal: 18, reward: 125, time: "5 дней" },
+  { client: "Капитан Миронов", title: "Морской китель", note: "Прочный, с ровными строчками и блестящими застёжками", tile: 3, goal: 19, reward: 135, time: "4 дня" },
+  { client: "Лавка «Пион»", title: "Фартуки для флористов", note: "Удобные карманы и вышитые полевые цветы", tile: 2, goal: 20, reward: 145, time: "5 дней" },
+  { client: "Госпожа Белова", title: "Наряд для путешествия", note: "Лёгкий жакет, практичная юбка и мятная отделка", tile: 1, goal: 21, reward: 155, time: "5 дней" },
+  { client: "Городской театр", title: "Костюмы для оперы", note: "Богатая драпировка, золотые нити и сценический блеск", tile: 0, goal: 23, reward: 175, time: "6 дней" },
+  { client: "Принцесса Элина", title: "Платье для коронации", note: "Торжественный силуэт, ручная вышивка и тонкое кружево", tile: 4, goal: 25, reward: 210, time: "7 дней" },
 ] as const;
 
 const DRAWING_SKETCHES = [
@@ -67,7 +76,10 @@ type Board = number[];
 type Screen = "home" | "match3" | "drawing";
 
 function movesForLevel(level: number) {
-  return level >= 4 ? LEVEL_FOUR_MOVES : STARTING_MOVES;
+  if (level >= 10) return LEVEL_TEN_MOVES;
+  if (level >= 7) return LEVEL_SEVEN_MOVES;
+  if (level >= 4) return LEVEL_FOUR_MOVES;
+  return STARTING_MOVES;
 }
 
 function assetPath(path: string) {
@@ -905,7 +917,8 @@ export default function Game() {
     setOrderProgress(0);
     setOrderReady(false);
     setShowOrderReadyMessage(false);
-    setToast(level >= 4 ? `Новая попытка: доступно ${LEVEL_FOUR_MOVES} ходов` : "Новая попытка началась");
+    const retryMoves = movesForLevel(level);
+    setToast(level >= 4 ? `Новая попытка: доступно ${retryMoves} ходов` : "Новая попытка началась");
   }
 
   function prepareDrawingCanvas(canvas: HTMLCanvasElement) {
@@ -1126,7 +1139,7 @@ export default function Game() {
 
   const homeScreen = <section className="home-layout home-layout-single screen-enter" aria-label="Главный экран ателье">{annaCard}</section>;
 
-  const matchScreen = activeOrder ? <section className="screen-enter embedded-game" aria-label="Игра три в ряд"><div className="match-layout"><section id="match-board" className="board-panel panel" aria-label="Поле три в ряд"><div className="section-heading board-heading"><div className="mode-title-row"><button type="button" className="inline-back-button" aria-label="Вернуться к Анне" onClick={() => setScreen("home")}>←</button><div><p className="eyebrow">игра в основном окне</p><h2>Соберите материалы</h2></div></div><div className={`moves-badge${moves <= 5 ? " moves-low" : ""}`}><strong>{moves}</strong><span>ходов</span></div></div><div className={`match-board${busy ? " board-busy" : ""}`} role="grid" aria-label="Игровое поле 7 на 7">{board.map((type, index) => <button className={`tile tile-type-${type}${selected === index ? " tile-selected" : ""}${matched.has(index) ? " tile-matched" : ""}`} key={index} type="button" role="gridcell" aria-label={`${TILE_TYPES[type].name}, ряд ${Math.floor(index / BOARD_SIZE) + 1}, столбец ${(index % BOARD_SIZE) + 1}`} aria-selected={selected === index} onClick={() => selectTile(index)} onPointerDown={(event) => beginSwipe(index, event)} onPointerUp={endSwipe} onPointerCancel={cancelSwipe} disabled={busy || orderReady || movesFinished}><TileSprite type={type} /></button>)}</div>{showOrderReadyMessage && <div className="order-ready-overlay" role="status" aria-live="assertive"><span>✓</span><strong>Заказ готов!</strong><small>Сейчас Анна порадуется своей работе</small></div>}{movesFinished && <div className="moves-finished-overlay" role="dialog" aria-modal="true" aria-labelledby="moves-finished-title"><span aria-hidden="true">↻</span><strong id="moves-finished-title">Ходы закончились</strong><small>{level >= 4 ? `На ${level}-м уровне новая попытка даст ${LEVEL_FOUR_MOVES} хода.` : "Начните попытку заново и соберите материалы для заказа."}</small><button type="button" className="primary-button" onClick={retryCurrentMatch}>Попробовать снова</button></div>}<div className="board-footer"><p aria-live="polite"><span>✦</span>{toast}</p><button type="button" className="text-button" onClick={startNewDay}>Новый день</button></div></section><aside className="order-brief-stack"><section className={`match-task-card panel${orderReady ? " order-ready" : ""}`}><div className="order-topline"><span>Задание заказа</span><b>{order.time}</b></div><div className="match-task-copy"><div className="client-row"><div className="client-avatar">{order.client.slice(0, 1)}</div><div><small>Клиент</small><strong>{order.client}</strong></div></div><div><h2>{order.title}</h2><p>{order.note}</p></div></div><div className="task-strip"><TileSprite type={order.tile} small /><div><span>Нужно собрать</span><strong>{TILE_TYPES[order.tile].short}</strong></div><div className="mini-progress"><span style={{ width: `${(orderProgress / order.goal) * 100}%` }} /></div><b>{orderProgress}/{order.goal}</b></div></section><div className="tip-card"><span>⌁</span><p><strong>Как играть</strong>Смахивайте фишки к соседним клеткам и собирайте ряды от трёх.</p></div></aside></div></section> : homeScreen;
+  const matchScreen = activeOrder ? <section className="screen-enter embedded-game" aria-label="Игра три в ряд"><div className="match-layout"><section id="match-board" className="board-panel panel" aria-label="Поле три в ряд"><div className="section-heading board-heading"><div className="mode-title-row"><button type="button" className="inline-back-button" aria-label="Вернуться к Анне" onClick={() => setScreen("home")}>←</button><div><p className="eyebrow">игра в основном окне</p><h2>Соберите материалы</h2></div></div><div className={`moves-badge${moves <= 5 ? " moves-low" : ""}`}><strong>{moves}</strong><span>ходов</span></div></div><div className={`match-board${busy ? " board-busy" : ""}`} role="grid" aria-label="Игровое поле 7 на 7">{board.map((type, index) => <button className={`tile tile-type-${type}${selected === index ? " tile-selected" : ""}${matched.has(index) ? " tile-matched" : ""}`} key={index} type="button" role="gridcell" aria-label={`${TILE_TYPES[type].name}, ряд ${Math.floor(index / BOARD_SIZE) + 1}, столбец ${(index % BOARD_SIZE) + 1}`} aria-selected={selected === index} onClick={() => selectTile(index)} onPointerDown={(event) => beginSwipe(index, event)} onPointerUp={endSwipe} onPointerCancel={cancelSwipe} disabled={busy || orderReady || movesFinished}><TileSprite type={type} /></button>)}</div>{showOrderReadyMessage && <div className="order-ready-overlay" role="status" aria-live="assertive"><span>✓</span><strong>Заказ готов!</strong><small>Сейчас Анна порадуется своей работе</small></div>}{movesFinished && <div className="moves-finished-overlay" role="dialog" aria-modal="true" aria-labelledby="moves-finished-title"><span aria-hidden="true">↻</span><strong id="moves-finished-title">Ходы закончились</strong><small>{level >= 4 ? `На ${level}-м уровне новая попытка даст ${movesForLevel(level)} ходов.` : "Начните попытку заново и соберите материалы для заказа."}</small><button type="button" className="primary-button" onClick={retryCurrentMatch}>Попробовать снова</button></div>}<div className="board-footer"><p aria-live="polite"><span>✦</span>{toast}</p><button type="button" className="text-button" onClick={startNewDay}>Новый день</button></div></section><aside className="order-brief-stack"><section className={`match-task-card panel${orderReady ? " order-ready" : ""}`}><div className="order-topline"><span>Задание заказа</span><b>{order.time}</b></div><div className="match-task-copy"><div className="client-row"><div className="client-avatar">{order.client.slice(0, 1)}</div><div><small>Клиент</small><strong>{order.client}</strong></div></div><div><h2>{order.title}</h2><p>{order.note}</p></div></div><div className="task-strip"><TileSprite type={order.tile} small /><div><span>Нужно собрать</span><strong>{TILE_TYPES[order.tile].short}</strong></div><div className="mini-progress"><span style={{ width: `${(orderProgress / order.goal) * 100}%` }} /></div><b>{orderProgress}/{order.goal}</b></div></section><div className="tip-card"><span>⌁</span><p><strong>Как играть</strong>Смахивайте фишки к соседним клеткам и собирайте ряды от трёх.</p></div></aside></div></section> : homeScreen;
 
   const activeSketch = DRAWING_SKETCHES[drawingSketchIndex];
   const drawingStepProgress = drawingPhase === "trace" ? Math.min(48, drawingProgress * 0.68) : drawingPhase === "color" ? 58 + Math.min(22, paintedZones.length * 6) : drawingPhase === "stamp" ? 88 : 100;
