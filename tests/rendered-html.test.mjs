@@ -154,6 +154,21 @@ test("keeps the mobile match-three game on one screen", async () => {
   assert.doesNotMatch(css, /:has\(#match-board\)/);
 });
 
+test("gives level four more moves and offers a retry when moves run out", async () => {
+  const game = await readFile(new URL("../app/Game.tsx", import.meta.url), "utf8");
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  assert.match(game, /const LEVEL_FOUR_MOVES = 32/);
+  assert.match(game, /return level >= 4 \? LEVEL_FOUR_MOVES : STARTING_MOVES/);
+  assert.match(game, /setMoves\(movesForLevel\(level\)\)/);
+  assert.match(game, /const movesFinished = screen === "match3" && activeOrder && !orderReady && !busy && moves <= 0/);
+  assert.match(game, /className="moves-finished-overlay" role="dialog" aria-modal="true"/);
+  assert.match(game, />Попробовать снова<\/button>/);
+  assert.match(game, /function retryCurrentMatch\(\)/);
+  assert.match(game, /setOrderProgress\(0\)/);
+  assert.match(css, /\.moves-finished-overlay\s*\{/);
+  assert.match(css, /\.moves-finished-overlay \.primary-button\s*\{/);
+});
+
 test("keeps the order-ready message centered inside the match-three field", async () => {
   const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
   assert.match(css, /\.board-panel\s*\{[^}]*position: relative/);

@@ -1466,6 +1466,34 @@ h1 {
 .order-ready-overlay > span { display: grid; width: 58px; height: 58px; place-items: center; border-radius: 50%; color: #fff; background: var(--teal); font-size: 28px; }
 .order-ready-overlay strong { color: #4e3835; font: 600 29px/1 Georgia, serif; }
 .order-ready-overlay small { color: var(--muted); font-size: 10px; }
+.moves-finished-overlay {
+  position: absolute;
+  z-index: 12;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  box-sizing: border-box;
+  width: min(340px, calc(100% - 28px));
+  max-width: calc(100% - 28px);
+  min-height: 168px;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  padding: 22px;
+  border: 1px solid rgba(183, 95, 101, 0.3);
+  border-radius: 28px;
+  color: var(--rose-dark);
+  text-align: center;
+  background: rgba(255, 252, 242, 0.96);
+  box-shadow: 0 24px 70px rgba(54, 37, 31, 0.3);
+  transform: translate(-50%, -50%);
+  animation: order-ready-pop 320ms ease both;
+  backdrop-filter: blur(10px);
+}
+.moves-finished-overlay > span { display: grid; width: 58px; height: 58px; place-items: center; border-radius: 50%; color: #fff; background: var(--rose); font-size: 28px; }
+.moves-finished-overlay strong { color: #4e3835; font: 600 29px/1 Georgia, serif; }
+.moves-finished-overlay small { color: var(--muted); font-size: 10px; line-height: 1.4; }
+.moves-finished-overlay .primary-button { min-width: 190px; min-height: 46px; margin-top: 4px; }
 
 .orders-page { padding: 32px; }
 .orders-header { display: flex; align-items: center; justify-content: space-between; padding: 0 2px 24px; border-bottom: 1px solid var(--line); }
@@ -2176,6 +2204,16 @@ h1 {
   .order-ready-overlay strong {
     font-size: 23px;
   }
+
+  .moves-finished-overlay {
+    width: min(280px, calc(100% - 20px));
+    max-width: calc(100% - 20px);
+    min-height: 132px;
+    padding: 16px 14px;
+    border-radius: 20px;
+  }
+
+  .moves-finished-overlay strong { font-size: 23px; }
 }
 
 @media (min-width: 761px) {

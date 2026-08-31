@@ -20,6 +20,7 @@ import type { DeferredInstallPrompt, PushBackendConfig } from "./pwa-client";
 
 const BOARD_SIZE = 7;
 const STARTING_MOVES = 24;
+const LEVEL_FOUR_MOVES = 32;
 const DRAWING_UNLOCK_AT = 50;
 
 const TILE_TYPES = [
@@ -64,6 +65,10 @@ type ColoringRegionMap = { labels: Int32Array; sizes: number[]; width: number; h
 
 type Board = number[];
 type Screen = "home" | "match3" | "drawing";
+
+function movesForLevel(level: number) {
+  return level >= 4 ? LEVEL_FOUR_MOVES : STARTING_MOVES;
+}
 
 function assetPath(path: string) {
   const html = typeof globalThis.document === "undefined" ? undefined : globalThis.document.documentElement;
@@ -265,6 +270,7 @@ export default function Game() {
   const drawingUnlocked = boredom >= DRAWING_UNLOCK_AT;
   const level = Math.floor(score / 1600) + 1;
   const averageCare = Math.round((hunger + energy + (100 - boredom)) / 3);
+  const movesFinished = screen === "match3" && activeOrder && !orderReady && !busy && moves <= 0;
 
   const currentSave = useMemo<GameSaveState>(() => ({
     board,
@@ -626,7 +632,7 @@ export default function Game() {
   function acceptOrder() {
     if (!hasAvailableOrder) return;
     playSound("tap");
-    setActiveOrder(true); setOrderProgress(0); setOrderReady(false); setMoves(STARTING_MOVES);
+    setActiveOrder(true); setOrderProgress(0); setOrderReady(false); setMoves(movesForLevel(level));
     setBoard(makeBoard(Date.now() % 100000)); setShowOrderModal(false); setScreen("match3");
     setToast(`Заказ «${order.title}» принят — соберите ${TILE_TYPES[order.tile].short.toLowerCase()}`);
   }
@@ -642,6 +648,11 @@ export default function Game() {
       playSound("success");
       setSelected(null); setMatched(new Set()); setShowOrderReadyMessage(true);
       setToast("Заказ готов!");
+      return;
+    }
+    if (moves <= 1) {
+      playSound("fail");
+      setToast("Ходы закончились — попробуйте снова");
       return;
     }
     playSound("coin");
@@ -664,7 +675,7 @@ export default function Game() {
 
   function trySwap(first: number, second: number) {
     if (busy || orderReady || !activeOrder) return;
-    if (moves <= 0) return setToast("Ходы закончились — начните новый день");
+    if (moves <= 0) return setToast("Ходы закончились — попробуйте снова");
     const swapped = [...board]; [swapped[first], swapped[second]] = [swapped[second], swapped[first]]; setSelected(null);
     if (findMatches(swapped).size === 0) {
       playSound("fail");
@@ -680,7 +691,7 @@ export default function Game() {
   function selectTile(index: number) {
     if (suppressNextClick.current) { suppressNextClick.current = false; return; }
     if (busy || orderReady || !activeOrder) return;
-    if (moves <= 0) return setToast("Ходы закончились — начните новый день");
+    if (moves <= 0) return setToast("Ходы закончились — попробуйте снова");
     if (selected === null) return setSelected(index);
     if (selected === index) return setSelected(null);
     if (!areNeighbours(selected, index)) { setSelected(index); setToast("Выберите соседнюю фишку"); return; }
@@ -880,7 +891,21 @@ export default function Game() {
 
   function startNewDay() {
     playSound("welcome");
-    setBoard(makeBoard(Date.now() % 100000)); setSelected(null); setMatched(new Set()); setMoves(STARTING_MOVES); setToast("Новый день в мастерской начался");
+    setBoard(makeBoard(Date.now() % 100000)); setSelected(null); setMatched(new Set()); setMoves(movesForLevel(level)); setToast("Новый день в мастерской начался");
+  }
+
+  function retryCurrentMatch() {
+    playSound("tap");
+    gameSessionRef.current += 1;
+    setBoard(makeBoard(Date.now() % 100000));
+    setSelected(null);
+    setMatched(new Set());
+    setBusy(false);
+    setMoves(movesForLevel(level));
+    setOrderProgress(0);
+    setOrderReady(false);
+    setShowOrderReadyMessage(false);
+    setToast(level >= 4 ? `Новая попытка: доступно ${LEVEL_FOUR_MOVES} ходов` : "Новая попытка началась");
   }
 
   function prepareDrawingCanvas(canvas: HTMLCanvasElement) {
@@ -1101,7 +1126,7 @@ export default function Game() {
 
   const homeScreen = <section className="home-layout home-layout-single screen-enter" aria-label="Главный экран ателье">{annaCard}</section>;
 
-  const matchScreen = activeOrder ? <section className="screen-enter embedded-game" aria-label="Игра три в ряд"><div className="match-layout"><section id="match-board" className="board-panel panel" aria-label="Поле три в ряд"><div className="section-heading board-heading"><div className="mode-title-row"><button type="button" className="inline-back-button" aria-label="Вернуться к Анне" onClick={() => setScreen("home")}>←</button><div><p className="eyebrow">игра в основном окне</p><h2>Соберите материалы</h2></div></div><div className={`moves-badge${moves <= 5 ? " moves-low" : ""}`}><strong>{moves}</strong><span>ходов</span></div></div><div className={`match-board${busy ? " board-busy" : ""}`} role="grid" aria-label="Игровое поле 7 на 7">{board.map((type, index) => <button className={`tile tile-type-${type}${selected === index ? " tile-selected" : ""}${matched.has(index) ? " tile-matched" : ""}`} key={index} type="button" role="gridcell" aria-label={`${TILE_TYPES[type].name}, ряд ${Math.floor(index / BOARD_SIZE) + 1}, столбец ${(index % BOARD_SIZE) + 1}`} aria-selected={selected === index} onClick={() => selectTile(index)} onPointerDown={(event) => beginSwipe(index, event)} onPointerUp={endSwipe} onPointerCancel={cancelSwipe} disabled={busy || orderReady}><TileSprite type={type} /></button>)}</div>{showOrderReadyMessage && <div className="order-ready-overlay" role="status" aria-live="assertive"><span>✓</span><strong>Заказ готов!</strong><small>Сейчас Анна порадуется своей работе</small></div>}<div className="board-footer"><p aria-live="polite"><span>✦</span>{toast}</p><button type="button" className="text-button" onClick={startNewDay}>Новый день</button></div></section><aside className="order-brief-stack"><section className={`match-task-card panel${orderReady ? " order-ready" : ""}`}><div className="order-topline"><span>Задание заказа</span><b>{order.time}</b></div><div className="match-task-copy"><div className="client-row"><div className="client-avatar">{order.client.slice(0, 1)}</div><div><small>Клиент</small><strong>{order.client}</strong></div></div><div><h2>{order.title}</h2><p>{order.note}</p></div></div><div className="task-strip"><TileSprite type={order.tile} small /><div><span>Нужно собрать</span><strong>{TILE_TYPES[order.tile].short}</strong></div><div className="mini-progress"><span style={{ width: `${(orderProgress / order.goal) * 100}%` }} /></div><b>{orderProgress}/{order.goal}</b></div></section><div className="tip-card"><span>⌁</span><p><strong>Как играть</strong>Смахивайте фишки к соседним клеткам и собирайте ряды от трёх.</p></div></aside></div></section> : homeScreen;
+  const matchScreen = activeOrder ? <section className="screen-enter embedded-game" aria-label="Игра три в ряд"><div className="match-layout"><section id="match-board" className="board-panel panel" aria-label="Поле три в ряд"><div className="section-heading board-heading"><div className="mode-title-row"><button type="button" className="inline-back-button" aria-label="Вернуться к Анне" onClick={() => setScreen("home")}>←</button><div><p className="eyebrow">игра в основном окне</p><h2>Соберите материалы</h2></div></div><div className={`moves-badge${moves <= 5 ? " moves-low" : ""}`}><strong>{moves}</strong><span>ходов</span></div></div><div className={`match-board${busy ? " board-busy" : ""}`} role="grid" aria-label="Игровое поле 7 на 7">{board.map((type, index) => <button className={`tile tile-type-${type}${selected === index ? " tile-selected" : ""}${matched.has(index) ? " tile-matched" : ""}`} key={index} type="button" role="gridcell" aria-label={`${TILE_TYPES[type].name}, ряд ${Math.floor(index / BOARD_SIZE) + 1}, столбец ${(index % BOARD_SIZE) + 1}`} aria-selected={selected === index} onClick={() => selectTile(index)} onPointerDown={(event) => beginSwipe(index, event)} onPointerUp={endSwipe} onPointerCancel={cancelSwipe} disabled={busy || orderReady || movesFinished}><TileSprite type={type} /></button>)}</div>{showOrderReadyMessage && <div className="order-ready-overlay" role="status" aria-live="assertive"><span>✓</span><strong>Заказ готов!</strong><small>Сейчас Анна порадуется своей работе</small></div>}{movesFinished && <div className="moves-finished-overlay" role="dialog" aria-modal="true" aria-labelledby="moves-finished-title"><span aria-hidden="true">↻</span><strong id="moves-finished-title">Ходы закончились</strong><small>{level >= 4 ? `На ${level}-м уровне новая попытка даст ${LEVEL_FOUR_MOVES} хода.` : "Начните попытку заново и соберите материалы для заказа."}</small><button type="button" className="primary-button" onClick={retryCurrentMatch}>Попробовать снова</button></div>}<div className="board-footer"><p aria-live="polite"><span>✦</span>{toast}</p><button type="button" className="text-button" onClick={startNewDay}>Новый день</button></div></section><aside className="order-brief-stack"><section className={`match-task-card panel${orderReady ? " order-ready" : ""}`}><div className="order-topline"><span>Задание заказа</span><b>{order.time}</b></div><div className="match-task-copy"><div className="client-row"><div className="client-avatar">{order.client.slice(0, 1)}</div><div><small>Клиент</small><strong>{order.client}</strong></div></div><div><h2>{order.title}</h2><p>{order.note}</p></div></div><div className="task-strip"><TileSprite type={order.tile} small /><div><span>Нужно собрать</span><strong>{TILE_TYPES[order.tile].short}</strong></div><div className="mini-progress"><span style={{ width: `${(orderProgress / order.goal) * 100}%` }} /></div><b>{orderProgress}/{order.goal}</b></div></section><div className="tip-card"><span>⌁</span><p><strong>Как играть</strong>Смахивайте фишки к соседним клеткам и собирайте ряды от трёх.</p></div></aside></div></section> : homeScreen;
 
   const activeSketch = DRAWING_SKETCHES[drawingSketchIndex];
   const drawingStepProgress = drawingPhase === "trace" ? Math.min(48, drawingProgress * 0.68) : drawingPhase === "color" ? 58 + Math.min(22, paintedZones.length * 6) : drawingPhase === "stamp" ? 88 : 100;
