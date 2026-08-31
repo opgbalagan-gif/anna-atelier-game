@@ -289,15 +289,45 @@ test("resets every persisted game field for a new game", async () => {
   assert.match(game, /Начать новую игру\? Текущий прогресс будет удалён/);
 });
 
-test("builds a movable release with a polished loading state", async () => {
+test("builds a movable release with an immediate artwork splash", async () => {
   const html = await readFile(new URL("../github-pages/index.html", import.meta.url), "utf8");
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  const splash = await readFile(new URL("../public/assets/loading/atelier-anna-splash.png", import.meta.url));
   const config = await readFile(new URL("../vite.pages.config.ts", import.meta.url), "utf8");
   const packageData = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
   assert.equal(packageData.version, "1.0.0");
   assert.match(html, /data-asset-prefix="\.\/"/);
-  assert.match(html, /Загружаем мастерскую/);
+  assert.match(html, /rel="preload" as="image" href="\.\/assets\/loading\/atelier-anna-splash\.png" fetchpriority="high"/);
+  assert.match(html, /<main class="splash-screen"[^>]*Открываем ателье, загружено 0%/);
+  assert.match(html, /<strong>Открываем ателье…<\/strong>/);
+  assert.match(html, /aria-valuenow="0"/);
+  assert.match(html, /background-size:cover/);
   assert.match(html, /content="1\.0\.0"/);
   assert.match(config, /base: "\.\/"/);
+  assert.deepEqual([...splash.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+  assert.equal(splash.readUInt32BE(16), 941);
+  assert.equal(splash.readUInt32BE(20), 1672);
+  assert.match(css, /\.splash-screen\s*\{[^}]*position: fixed;[^}]*height: 100dvh;[^}]*background-size: cover;[^}]*transition: opacity 460ms ease/);
+  assert.match(css, /bottom: max\(24px, calc\(env\(safe-area-inset-bottom\) \+ 16px\)\)/);
+});
+
+test("ties splash progress to critical asset bytes and game readiness", async () => {
+  const loader = await readFile(new URL("../app/StartupLoader.tsx", import.meta.url), "utf8");
+  const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  const entry = await readFile(new URL("../github-pages/main.tsx", import.meta.url), "utf8");
+  assert.match(loader, /CRITICAL_ASSETS/);
+  assert.equal((loader.match(/\.mp4"/g) ?? []).length, 1, "only the initial Anna video is critical");
+  assert.match(loader, /response\.body\?\.getReader\(\)/);
+  assert.match(loader, /loaded \+= chunk\.value\.byteLength/);
+  assert.match(loader, /document\.fonts\.ready/);
+  assert.match(loader, /cache: "force-cache"/);
+  assert.match(loader, /<Game onReady=\{markGameReady\}/);
+  assert.match(loader, /progress !== 100/);
+  assert.match(loader, /splashRemoved && <main/);
+  assert.match(loader, /FADE_MS = 460/);
+  assert.doesNotMatch(loader, /\.play\(\)/, "preloading must not start audio or video playback");
+  assert.match(page, /<StartupLoader \/>/);
+  assert.match(entry, /<StartupLoader \/>/);
 });
 
 test("ships an installable subdirectory-safe PWA", async () => {

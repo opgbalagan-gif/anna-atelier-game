@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Game from "./Game";
+import StartupLoader from "./StartupLoader";
 
 export const metadata: Metadata = {
   title: "Ателье Анны — уютная игра",
@@ -7,5 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function Home() {
-  return <Game />;
+  return <StartupLoader />;
 }

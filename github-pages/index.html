@@ -7,7 +7,7 @@
       name="description"
       content="Ателье Анны — уютная игра-тамагочи про швею с механикой три в ряд."
     />
-    <meta name="theme-color" content="#b75f65" />
+    <meta name="theme-color" content="#3a2116" />
     <meta name="application-name" content="Ателье Анны" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -19,18 +19,16 @@
     <meta property="og:description" content="Уютная история мастерской" />
     <meta property="og:image" content="./og.png" />
     <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="preload" as="image" href="./assets/loading/atelier-anna-splash.png" fetchpriority="high" />
     <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png" />
     <title>Ателье Анны — v1.0.0</title>
     <style>
-      html,body{min-width:320px;min-height:100%;margin:0;background:#efe4d4;color:#4e3835;font-family:"Trebuchet MS",Arial,sans-serif}
-      .boot-loader{display:grid;min-height:100dvh;place-items:center;align-content:center;gap:10px;text-align:center;background:radial-gradient(circle at 8% 0%,rgba(255,255,255,.84),transparent 28%),linear-gradient(135deg,#efe4d4 0%,#f7eee2 48%,#ead9c5 100%)}
-      .boot-mark{display:grid;width:74px;height:74px;margin-bottom:4px;place-items:center;border:1px solid rgba(183,95,101,.34);border-radius:50% 50% 44% 56%;color:#fff8ed;background:linear-gradient(145deg,#c87175,#9e4e57);box-shadow:inset 0 0 0 6px rgba(255,255,255,.16),0 10px 30px rgba(143,68,76,.2);font:italic 700 40px/1 Georgia,serif;transform:rotate(-4deg)}
-      .boot-loader strong{font:600 30px/1.1 Georgia,serif}.boot-loader span{color:#887a76;font-size:11px}.boot-loader i{overflow:hidden;width:150px;height:5px;margin-top:5px;border-radius:999px;background:rgba(99,72,59,.12)}.boot-loader i::after{display:block;width:48%;height:100%;border-radius:inherit;content:"";background:linear-gradient(90deg,#b75f65,#dda84b);animation:boot-progress 900ms ease-in-out infinite alternate}@keyframes boot-progress{from{transform:translateX(-54px)}to{transform:translateX(80px)}}
+      *{box-sizing:border-box}html,body,#root{min-width:320px;min-height:100%;margin:0;background:#3a2116;color:#fff7e9;font-family:"Trebuchet MS",Arial,sans-serif}.splash-screen{position:fixed;z-index:10000;inset:0;width:100%;height:100vh;height:100dvh;overflow:hidden;background-color:#3a2116;background-image:linear-gradient(to bottom,transparent 54%,rgba(39,20,13,.12) 72%,rgba(39,20,13,.72) 100%),url("/assets/loading/atelier-anna-splash.png");background-position:center;background-repeat:no-repeat;background-size:cover}.splash-loading-card{position:absolute;right:max(22px,env(safe-area-inset-right));bottom:max(24px,calc(env(safe-area-inset-bottom) + 16px));left:max(22px,env(safe-area-inset-left));display:grid;width:min(330px,calc(100% - 44px));margin:0 auto;padding:15px 18px 13px;border:1px solid rgba(255,238,211,.32);border-radius:18px;background:rgba(65,35,25,.64);box-shadow:0 12px 34px rgba(29,13,8,.24),inset 0 1px rgba(255,248,232,.12);text-align:center;-webkit-backdrop-filter:blur(8px) saturate(.92);backdrop-filter:blur(8px) saturate(.92)}.splash-loading-card strong{font:italic 600 17px/1.2 Georgia,serif;letter-spacing:.01em;text-shadow:0 1px 8px rgba(22,9,5,.42)}.splash-loading-card>span{margin-top:7px;color:rgba(255,242,219,.76);font-size:9px;font-variant-numeric:tabular-nums;letter-spacing:.12em}.splash-progress-track{overflow:hidden;width:100%;height:5px;margin-top:11px;border:1px solid rgba(255,237,207,.22);border-radius:999px;background:rgba(38,19,13,.48);box-shadow:inset 0 1px 3px rgba(25,10,6,.28)}.splash-progress-track i{display:block;width:0;height:100%;border-radius:inherit;background:linear-gradient(90deg,#b85f69,#d59c58 72%,#f0c987);box-shadow:0 0 8px rgba(227,161,104,.34)}
     </style>
   </head>
   <body>
-    <div id="root"><main class="boot-loader" role="status" aria-live="polite"><div class="boot-mark" aria-hidden="true">А</div><strong>Ателье Анны</strong><span>Загружаем мастерскую…</span><i aria-hidden="true"></i></main></div>
+    <div id="root"><main class="splash-screen" role="status" aria-live="polite" aria-label="Открываем ателье, загружено 0%"><div class="splash-loading-card"><strong>Открываем ателье…</strong><div class="splash-progress-track" role="progressbar" aria-label="Загрузка игры" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div><span>0%</span></div></main></div>
     <script type="module" src="./main.tsx"></script>
   </body>
 </html>

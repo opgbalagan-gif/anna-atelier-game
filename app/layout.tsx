@@ -43,6 +43,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ru">
+      <head>
+        <link rel="preload" as="image" href="/assets/loading/atelier-anna-splash.png" fetchPriority="high" />
+      </head>
       <body>{children}</body>
     </html>
   );

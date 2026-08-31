@@ -217,7 +217,7 @@ function Meter({ label, value, tone }: { label: string; value: number; tone: str
   return <div className="meter-row"><div className="meter-copy"><span>{label}</span><strong>{Math.round(value)}%</strong></div><div className="meter-track" aria-label={`${label}: ${Math.round(value)}%`}><span className={`meter-fill meter-${tone}`} style={{ width: `${value}%` }} /></div></div>;
 }
 
-export default function Game() {
+export default function Game({ onReady }: { onReady?: () => void } = {}) {
   const [saveReady, setSaveReady] = useState(false);
   const [screen, setScreen] = useState<Screen>("home");
   const [board, setBoard] = useState<Board>(() => makeBoard());
@@ -304,6 +304,10 @@ export default function Game() {
   useEffect(() => {
     saveSnapshotRef.current = currentSave;
   }, [currentSave]);
+
+  useEffect(() => {
+    if (saveReady) onReady?.();
+  }, [onReady, saveReady]);
 
   useEffect(() => {
     let cancelled = false;

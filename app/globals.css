@@ -51,6 +51,94 @@ button:focus-visible {
   outline-offset: 3px;
 }
 
+.startup-game {
+  min-height: 100dvh;
+}
+
+.splash-screen {
+  position: fixed;
+  z-index: 10000;
+  inset: 0;
+  display: block;
+  width: 100%;
+  min-width: 320px;
+  height: 100vh;
+  height: 100dvh;
+  margin: 0;
+  overflow: hidden;
+  color: #fff7e9;
+  background-color: #3a2116;
+  background-image: linear-gradient(to bottom, transparent 54%, rgba(39, 20, 13, 0.12) 72%, rgba(39, 20, 13, 0.72) 100%), var(--splash-image);
+  background-position: center center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  opacity: 1;
+  transition: opacity 460ms ease;
+  isolation: isolate;
+}
+
+.splash-screen-leaving {
+  opacity: 0;
+}
+
+.splash-loading-card {
+  position: absolute;
+  right: max(22px, env(safe-area-inset-right));
+  bottom: max(24px, calc(env(safe-area-inset-bottom) + 16px));
+  left: max(22px, env(safe-area-inset-left));
+  display: grid;
+  width: min(330px, calc(100% - 44px));
+  margin: 0 auto;
+  padding: 15px 18px 13px;
+  border: 1px solid rgba(255, 238, 211, 0.32);
+  border-radius: 18px;
+  background: rgba(65, 35, 25, 0.64);
+  box-shadow: 0 12px 34px rgba(29, 13, 8, 0.24), inset 0 1px rgba(255, 248, 232, 0.12);
+  text-align: center;
+  -webkit-backdrop-filter: blur(8px) saturate(0.92);
+  backdrop-filter: blur(8px) saturate(0.92);
+}
+
+.splash-loading-card strong {
+  font: italic 600 17px/1.2 Georgia, serif;
+  letter-spacing: 0.01em;
+  text-shadow: 0 1px 8px rgba(22, 9, 5, 0.42);
+}
+
+.splash-loading-card > span {
+  margin-top: 7px;
+  color: rgba(255, 242, 219, 0.76);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.12em;
+}
+
+.splash-progress-track {
+  overflow: hidden;
+  width: 100%;
+  height: 5px;
+  margin-top: 11px;
+  border: 1px solid rgba(255, 237, 207, 0.22);
+  border-radius: 999px;
+  background: rgba(38, 19, 13, 0.48);
+  box-shadow: inset 0 1px 3px rgba(25, 10, 6, 0.28);
+}
+
+.splash-progress-track i {
+  display: block;
+  width: var(--splash-progress);
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #b85f69, #d59c58 72%, #f0c987);
+  box-shadow: 0 0 8px rgba(227, 161, 104, 0.34);
+  transition: width 140ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .splash-screen { transition-duration: 300ms; }
+  .splash-progress-track i { transition: none; }
+}
+
 .game-shell {
   width: min(960px, calc(100% - 44px), calc(133.333dvh - 243px));
   margin: 0 auto;
