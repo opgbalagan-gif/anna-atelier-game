@@ -23,6 +23,9 @@ const STARTING_MOVES = 24;
 const LEVEL_FOUR_MOVES = 32;
 const LEVEL_SEVEN_MOVES = 36;
 const LEVEL_TEN_MOVES = 40;
+const TARGET_TILE_CHANCE = 0.3;
+const LATE_TARGET_TILE_CHANCE = 0.36;
+const RETRY_TARGET_TILE_CHANCE = 0.44;
 const DRAWING_UNLOCK_AT = 50;
 
 const TILE_TYPES = [
@@ -82,6 +85,11 @@ function movesForLevel(level: number) {
   return STARTING_MOVES;
 }
 
+function targetTileChance(level: number, retry = false) {
+  if (retry) return RETRY_TARGET_TILE_CHANCE;
+  return level >= 4 ? LATE_TARGET_TILE_CHANCE : TARGET_TILE_CHANCE;
+}
+
 function assetPath(path: string) {
   const html = typeof globalThis.document === "undefined" ? undefined : globalThis.document.documentElement;
   const prefix = html?.dataset.assetPrefix || "/";
@@ -96,17 +104,24 @@ function seededRandom(seed: number) {
   };
 }
 
-function makeBoard(seed = 104729): Board {
+function pickTile(random: () => number, targetTile?: number, targetChance = 0) {
+  if (targetTile === undefined) return Math.floor(random() * TILE_TYPES.length);
+  if (random() < targetChance) return targetTile;
+  const otherTile = Math.floor(random() * (TILE_TYPES.length - 1));
+  return otherTile >= targetTile ? otherTile + 1 : otherTile;
+}
+
+function makeBoard(seed = 104729, targetTile?: number, targetChance = 0): Board {
   const random = seededRandom(seed);
   const board: number[] = [];
   for (let index = 0; index < BOARD_SIZE * BOARD_SIZE; index += 1) {
     const row = Math.floor(index / BOARD_SIZE);
     const column = index % BOARD_SIZE;
-    let value = Math.floor(random() * TILE_TYPES.length);
+    let value = pickTile(random, targetTile, targetChance);
     while (
       (column >= 2 && board[index - 1] === value && board[index - 2] === value) ||
       (row >= 2 && board[index - BOARD_SIZE] === value && board[index - BOARD_SIZE * 2] === value)
-    ) value = Math.floor(random() * TILE_TYPES.length);
+    ) value = pickTile(random, targetTile, targetChance);
     board.push(value);
   }
   return board;
@@ -139,7 +154,7 @@ function findMatches(board: Board) {
   return matches;
 }
 
-function collapseBoard(board: Board, matched: Set<number>): Board {
+function collapseBoard(board: Board, matched: Set<number>, targetTile?: number, targetChance = 0): Board {
   const next = [...board];
   for (let column = 0; column < BOARD_SIZE; column += 1) {
     const survivors: number[] = [];
@@ -149,7 +164,7 @@ function collapseBoard(board: Board, matched: Set<number>): Board {
     }
     for (let row = BOARD_SIZE - 1; row >= 0; row -= 1) {
       const index = row * BOARD_SIZE + column;
-      next[index] = survivors[BOARD_SIZE - 1 - row] ?? Math.floor(Math.random() * TILE_TYPES.length);
+      next[index] = survivors[BOARD_SIZE - 1 - row] ?? pickTile(Math.random, targetTile, targetChance);
     }
   }
   return next;
@@ -657,7 +672,7 @@ export default function Game({ onReady }: { onReady?: () => void } = {}) {
     if (!hasAvailableOrder) return;
     playSound("tap");
     setActiveOrder(true); setOrderProgress(0); setOrderReady(false); setMoves(movesForLevel(level));
-    setBoard(makeBoard(Date.now() % 100000)); setShowOrderModal(false); setScreen("match3");
+    setBoard(makeBoard(Date.now() % 100000, order.tile, targetTileChance(level))); setShowOrderModal(false); setScreen("match3");
     setToast(`Заказ «${order.title}» принят — соберите ${TILE_TYPES[order.tile].short.toLowerCase()}`);
   }
 
@@ -692,7 +707,7 @@ export default function Game({ onReady }: { onReady?: () => void } = {}) {
     setMatched(matches);
     window.setTimeout(() => {
       if (session !== gameSessionRef.current) return;
-      const collapsed = collapseBoard(current, matches); setBoard(collapsed); setMatched(new Set());
+      const collapsed = collapseBoard(current, matches, order.tile, targetTileChance(level)); setBoard(collapsed); setMatched(new Set());
       window.setTimeout(() => runCascade(collapsed, combo + 1, points + matches.size * 12 * combo, nextCollected, session), 180);
     }, 260);
   }
@@ -915,22 +930,21 @@ export default function Game({ onReady }: { onReady?: () => void } = {}) {
 
   function startNewDay() {
     playSound("welcome");
-    setBoard(makeBoard(Date.now() % 100000)); setSelected(null); setMatched(new Set()); setMoves(movesForLevel(level)); setToast("Новый день в мастерской начался");
+    setBoard(makeBoard(Date.now() % 100000, order.tile, targetTileChance(level))); setSelected(null); setMatched(new Set()); setMoves(movesForLevel(level)); setToast("Новый день в мастерской начался");
   }
 
   function retryCurrentMatch() {
     playSound("tap");
     gameSessionRef.current += 1;
-    setBoard(makeBoard(Date.now() % 100000));
+    setBoard(makeBoard(Date.now() % 100000, order.tile, targetTileChance(level, true)));
     setSelected(null);
     setMatched(new Set());
     setBusy(false);
     setMoves(movesForLevel(level));
-    setOrderProgress(0);
     setOrderReady(false);
     setShowOrderReadyMessage(false);
     const retryMoves = movesForLevel(level);
-    setToast(level >= 4 ? `Новая попытка: доступно ${retryMoves} ходов` : "Новая попытка началась");
+    setToast(`Новая попытка: прогресс сохранён, ${retryMoves} ходов`);
   }
 
   function prepareDrawingCanvas(canvas: HTMLCanvasElement) {

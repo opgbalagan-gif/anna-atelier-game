@@ -207,9 +207,23 @@ test("gives later levels more moves and offers a retry when moves run out", asyn
   assert.match(game, /className="moves-finished-overlay" role="dialog" aria-modal="true"/);
   assert.match(game, />Попробовать снова<\/button>/);
   assert.match(game, /function retryCurrentMatch\(\)/);
-  assert.match(game, /setOrderProgress\(0\)/);
+  const retryStart = game.indexOf("function retryCurrentMatch()");
+  const retryEnd = game.indexOf("function prepareDrawingCanvas", retryStart);
+  const retryFunction = game.slice(retryStart, retryEnd);
+  assert.doesNotMatch(retryFunction, /setOrderProgress\(0\)/);
+  assert.match(retryFunction, /targetTileChance\(level, true\)/);
   assert.match(css, /\.moves-finished-overlay\s*\{/);
   assert.match(css, /\.moves-finished-overlay \.primary-button\s*\{/);
+});
+
+test("gives the required order material a higher chance on the board", async () => {
+  const game = await readFile(new URL("../app/Game.tsx", import.meta.url), "utf8");
+  assert.match(game, /const TARGET_TILE_CHANCE = 0\.3/);
+  assert.match(game, /const LATE_TARGET_TILE_CHANCE = 0\.36/);
+  assert.match(game, /const RETRY_TARGET_TILE_CHANCE = 0\.44/);
+  assert.match(game, /function pickTile\(random: \(\) => number, targetTile\?: number, targetChance = 0\)/);
+  assert.match(game, /makeBoard\(Date\.now\(\) % 100000, order\.tile, targetTileChance\(level\)\)/);
+  assert.match(game, /collapseBoard\(current, matches, order\.tile, targetTileChance\(level\)\)/);
 });
 
 test("keeps the order-ready message centered inside the match-three field", async () => {
