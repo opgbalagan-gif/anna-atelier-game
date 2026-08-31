@@ -122,7 +122,7 @@ export default function StartupLoader() {
     const controller = new AbortController();
     const safetyTimer = window.setTimeout(() => controller.abort(), 60_000);
 
-    const tasks = CRITICAL_ASSETS.map((asset, index) => preloadCriticalAsset(asset, (ratio) => {
+    const loadAsset = (asset: CriticalAsset, index: number) => preloadCriticalAsset(asset, (ratio) => {
       if (!active) return;
       setAssetProgress((current) => {
         if (ratio <= current[index]) return current;
@@ -130,11 +130,13 @@ export default function StartupLoader() {
         next[index] = ratio;
         return next;
       });
-    }, controller.signal));
+    }, controller.signal);
 
-    void Promise.allSettled(tasks).then(() => {
-      if (active) setAssetsSettled(true);
-    });
+    void loadAsset(CRITICAL_ASSETS[0], 0)
+      .then(() => Promise.allSettled(CRITICAL_ASSETS.slice(1).map((asset, index) => loadAsset(asset, index + 1))))
+      .then(() => {
+        if (active) setAssetsSettled(true);
+      });
 
     if (document.fonts?.ready) {
       void document.fonts.ready.then(() => {
@@ -180,13 +182,14 @@ export default function StartupLoader() {
   }, [splashRemoved]);
 
   const splashStyle = {
-    "--splash-image": `url("${assetPath("assets/loading/atelier-anna-splash.png")}")`,
     "--splash-progress": `${progress}%`,
   } as CSSProperties;
 
   return <>
     <div className="startup-game" aria-hidden={!splashRemoved} inert={!splashRemoved}><Game onReady={markGameReady} /></div>
     {!splashRemoved && <main className={`splash-screen${leaving ? " splash-screen-leaving" : ""}`} style={splashStyle} role="status" aria-live="polite" aria-label={`Открываем ателье, загружено ${progress}%`}>
+      {/* eslint-disable-next-line @next/next/no-img-element -- the raw eager image must match the pre-React splash and its runtime asset prefix */}
+      <img className="splash-art" src={assetPath("assets/loading/atelier-anna-splash.png")} alt="" aria-hidden="true" loading="eager" decoding="sync" fetchPriority="high" />
       <div className="splash-loading-card">
         <strong>Открываем ателье…</strong>
         <div className="splash-progress-track" role="progressbar" aria-label="Загрузка игры" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}><i /></div>

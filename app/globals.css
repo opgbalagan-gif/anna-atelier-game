@@ -68,13 +68,29 @@ button:focus-visible {
   overflow: hidden;
   color: #fff7e9;
   background-color: #3a2116;
-  background-image: linear-gradient(to bottom, transparent 54%, rgba(39, 20, 13, 0.12) 72%, rgba(39, 20, 13, 0.72) 100%), var(--splash-image);
-  background-position: center center;
-  background-repeat: no-repeat;
-  background-size: cover;
   opacity: 1;
   transition: opacity 460ms ease;
   isolation: isolate;
+}
+
+.splash-art {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center center;
+}
+
+.splash-screen::after {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent 54%, rgba(39, 20, 13, 0.12) 72%, rgba(39, 20, 13, 0.72) 100%);
 }
 
 .splash-screen-leaving {
@@ -83,6 +99,7 @@ button:focus-visible {
 
 .splash-loading-card {
   position: absolute;
+  z-index: 2;
   right: max(22px, env(safe-area-inset-right));
   bottom: max(24px, calc(env(safe-area-inset-bottom) + 16px));
   left: max(22px, env(safe-area-inset-left));

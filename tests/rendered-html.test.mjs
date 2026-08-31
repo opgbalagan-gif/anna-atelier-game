@@ -309,15 +309,17 @@ test("builds a movable release with an immediate artwork splash", async () => {
   assert.match(html, /data-asset-prefix="\.\/"/);
   assert.match(html, /rel="preload" as="image" href="\.\/assets\/loading\/atelier-anna-splash\.png" fetchpriority="high"/);
   assert.match(html, /<main class="splash-screen"[^>]*Открываем ателье, загружено 0%/);
+  assert.match(html, /<img class="splash-art" src="\.\/assets\/loading\/atelier-anna-splash\.png"[^>]*loading="eager"[^>]*fetchpriority="high"/);
   assert.match(html, /<strong>Открываем ателье…<\/strong>/);
   assert.match(html, /aria-valuenow="0"/);
-  assert.match(html, /background-size:cover/);
+  assert.match(html, /object-fit:cover/);
   assert.match(html, /content="1\.0\.0"/);
   assert.match(config, /base: "\.\/"/);
   assert.deepEqual([...splash.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
   assert.equal(splash.readUInt32BE(16), 941);
   assert.equal(splash.readUInt32BE(20), 1672);
-  assert.match(css, /\.splash-screen\s*\{[^}]*position: fixed;[^}]*height: 100dvh;[^}]*background-size: cover;[^}]*transition: opacity 460ms ease/);
+  assert.match(css, /\.splash-screen\s*\{[^}]*position: fixed;[^}]*height: 100dvh;[^}]*transition: opacity 460ms ease/);
+  assert.match(css, /\.splash-art\s*\{[^}]*object-fit: cover;[^}]*object-position: center center/);
   assert.match(css, /bottom: max\(24px, calc\(env\(safe-area-inset-bottom\) \+ 16px\)\)/);
 });
 
@@ -333,6 +335,7 @@ test("ties splash progress to critical asset bytes and game readiness", async ()
   assert.match(loader, /loaded \+= chunk\.value\.byteLength/);
   assert.match(loader, /document\.fonts\.ready/);
   assert.match(loader, /cache: "force-cache"/);
+  assert.match(loader, /loadAsset\(CRITICAL_ASSETS\[0\], 0\)[\s\S]*CRITICAL_ASSETS\.slice\(1\)/);
   assert.match(loader, /<Game onReady=\{markGameReady\}/);
   assert.match(loader, /progress !== 100/);
   assert.match(loader, /splashRemoved && <main/);
