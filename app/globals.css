@@ -448,8 +448,10 @@ h1 {
   transform: translateX(-50%);
 }
 
+.scene-video-current,
+.scene-video-incoming { backface-visibility: hidden; }
 .scene-video-current { opacity: 1; }
-.scene-video-incoming { z-index: 2; opacity: 0; transition: opacity 280ms ease; }
+.scene-video-incoming { z-index: 2; opacity: 0; transition: opacity 280ms ease; will-change: opacity; }
 .scene-video-incoming.scene-video-ready { opacity: 1; }
 
 .pwa-stage-actions {

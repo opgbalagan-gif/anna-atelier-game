@@ -534,38 +534,67 @@ export default function Game({ onReady }: { onReady?: () => void } = {}) {
   const [incomingReady, setIncomingReady] = useState(false);
   const displayedVideoRef = useRef<HTMLVideoElement | null>(null);
   const incomingVideoRef = useRef<HTMLVideoElement | null>(null);
+  const incomingPlaybackStarting = useRef(false);
   const videoTransitionTimer = useRef<number | null>(null);
 
   useEffect(() => {
-    if (annaVisual.video === displayedVisual.video) return;
+    if (annaVisual.video === displayedVisual.video) {
+      if (incomingVisual && incomingVisual.video !== annaVisual.video) {
+        const frame = window.requestAnimationFrame(() => {
+          incomingPlaybackStarting.current = false;
+          incomingVideoRef.current?.pause();
+          setIncomingReady(false);
+          setIncomingVisual(null);
+          void displayedVideoRef.current?.play().catch(() => undefined);
+        });
+        return () => window.cancelAnimationFrame(frame);
+      }
+      return;
+    }
+    if (incomingVisual?.video === annaVisual.video) return;
     if (videoTransitionTimer.current !== null) window.clearTimeout(videoTransitionTimer.current);
+    incomingPlaybackStarting.current = false;
     const frame = window.requestAnimationFrame(() => {
       setIncomingReady(false);
       setIncomingVisual(annaVisual);
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [annaVisual, displayedVisual.video]);
+  }, [annaVisual, displayedVisual.video, incomingVisual]);
 
   useEffect(() => () => {
     if (videoTransitionTimer.current !== null) window.clearTimeout(videoTransitionTimer.current);
   }, []);
 
   function revealIncomingVideo() {
-    if (!incomingVisual || incomingReady) return;
+    if (!incomingVisual || incomingReady || incomingPlaybackStarting.current) return;
     const nextVideo = incomingVideoRef.current;
     if (!nextVideo) return;
     if (incomingVisual.id === "eating" && nextVideo.readyState < HTMLMediaElement.HAVE_ENOUGH_DATA) return;
     const readyVisual = incomingVisual;
     nextVideo.currentTime = 0;
-    displayedVideoRef.current?.pause();
-    void nextVideo.play().catch(() => undefined);
-    setIncomingReady(true);
-    videoTransitionTimer.current = window.setTimeout(() => {
-      setDisplayedVisual(readyVisual);
-      setIncomingVisual((current) => current?.video === readyVisual.video ? null : current);
-      setIncomingReady(false);
-      videoTransitionTimer.current = null;
-    }, 280);
+    incomingPlaybackStarting.current = true;
+    const revealFirstFrame = () => {
+      if (incomingVideoRef.current !== nextVideo) {
+        incomingPlaybackStarting.current = false;
+        return;
+      }
+      displayedVideoRef.current?.pause();
+      setIncomingReady(true);
+      incomingPlaybackStarting.current = false;
+      if (readyVisual.id === "eating") return;
+      videoTransitionTimer.current = window.setTimeout(() => {
+        setDisplayedVisual(readyVisual);
+        setIncomingVisual((current) => current?.video === readyVisual.video ? null : current);
+        setIncomingReady(false);
+        videoTransitionTimer.current = null;
+      }, 280);
+    };
+    void nextVideo.play().then(() => {
+      if (typeof nextVideo.requestVideoFrameCallback === "function") nextVideo.requestVideoFrameCallback(revealFirstFrame);
+      else window.requestAnimationFrame(revealFirstFrame);
+    }).catch(() => {
+      incomingPlaybackStarting.current = false;
+    });
   }
 
   useEffect(() => {
@@ -776,6 +805,18 @@ export default function Game({ onReady }: { onReady?: () => void } = {}) {
     setToast(failed ? "Отдых завершён — ролик не удалось воспроизвести" : "Анна вернулась отдохнувшей");
   }
 
+  function finishEatingAnimation() {
+    if (temporaryStateTimer.current !== null) window.clearTimeout(temporaryStateTimer.current);
+    temporaryStateTimer.current = null;
+    incomingPlaybackStarting.current = false;
+    incomingVideoRef.current?.pause();
+    setIncomingReady(false);
+    setIncomingVisual(null);
+    setTemporaryState(null);
+    void displayedVideoRef.current?.play().catch(() => undefined);
+    setToast("Анна подкрепилась и снова готова к работе");
+  }
+
   async function requestInstallation() {
     playSound("tap");
     if (iosDevice) {
@@ -847,6 +888,7 @@ export default function Game({ onReady }: { onReady?: () => void } = {}) {
     temporaryStateTimer.current = null;
     if (videoTransitionTimer.current !== null) window.clearTimeout(videoTransitionTimer.current);
     videoTransitionTimer.current = null;
+    incomingPlaybackStarting.current = false;
     restCutsceneActiveRef.current = false;
     clearGameSave(window.localStorage);
     soundtrackRef.current?.pause();
@@ -914,10 +956,7 @@ export default function Game({ onReady }: { onReady?: () => void } = {}) {
     if (kind === "food") {
       setHunger((value) => Math.min(100, value + 22));
       setTemporaryState("eating");
-      temporaryStateTimer.current = window.setTimeout(() => {
-        setTemporaryState(null);
-        temporaryStateTimer.current = null;
-      }, 4200);
+      temporaryStateTimer.current = window.setTimeout(finishEatingAnimation, 5200);
     } else {
       setEnergy((value) => Math.min(100, value + 20));
       setTemporaryState(null);
@@ -1142,8 +1181,8 @@ export default function Game({ onReady }: { onReady?: () => void } = {}) {
   const annaCard = (
     <aside className="anna-card panel">
       <div className="character-stage" style={{ backgroundImage: `url("${assetPath("assets/anna-atelier-scene.png")}")` }}>
-        <video ref={displayedVideoRef} key={displayedVisual.video} className="scene-image scene-video-current" autoPlay loop={displayedVisual.id !== "celebrates" && displayedVisual.id !== "resting"} muted playsInline preload="auto" aria-label={displayedVisual.alt} onEnded={displayedVisual.id === "celebrates" ? finishCelebration : displayedVisual.id === "resting" ? () => finishRestCutscene() : undefined} onError={displayedVisual.id === "resting" ? () => finishRestCutscene(true) : undefined}><source src={displayedVisual.video} type="video/mp4" /></video>
-        {incomingVisual && <video ref={incomingVideoRef} key={incomingVisual.video} className={`scene-image scene-video-incoming${incomingReady ? " scene-video-ready" : ""}`} loop={incomingVisual.id !== "celebrates" && incomingVisual.id !== "resting"} muted playsInline preload="auto" aria-label={incomingVisual.alt} onCanPlay={revealIncomingVideo} onCanPlayThrough={revealIncomingVideo} onEnded={incomingVisual.id === "celebrates" ? finishCelebration : incomingVisual.id === "resting" ? () => finishRestCutscene() : undefined} onError={incomingVisual.id === "resting" ? () => finishRestCutscene(true) : undefined}><source src={incomingVisual.video} type="video/mp4" /></video>}
+        <video ref={displayedVideoRef} key={displayedVisual.video} className="scene-image scene-video-current" autoPlay loop={displayedVisual.id !== "celebrates" && displayedVisual.id !== "resting" && displayedVisual.id !== "eating"} muted playsInline preload="auto" aria-label={displayedVisual.alt} onEnded={displayedVisual.id === "celebrates" ? finishCelebration : displayedVisual.id === "resting" ? () => finishRestCutscene() : displayedVisual.id === "eating" ? finishEatingAnimation : undefined} onError={displayedVisual.id === "resting" ? () => finishRestCutscene(true) : undefined}><source src={displayedVisual.video} type="video/mp4" /></video>
+        {incomingVisual && <video ref={incomingVideoRef} key={incomingVisual.video} className={`scene-image scene-video-incoming${incomingReady ? " scene-video-ready" : ""}`} loop={incomingVisual.id !== "celebrates" && incomingVisual.id !== "resting" && incomingVisual.id !== "eating"} muted playsInline preload="auto" aria-label={incomingVisual.alt} onCanPlay={revealIncomingVideo} onCanPlayThrough={revealIncomingVideo} onEnded={incomingVisual.id === "celebrates" ? finishCelebration : incomingVisual.id === "resting" ? () => finishRestCutscene() : incomingVisual.id === "eating" ? finishEatingAnimation : undefined} onError={incomingVisual.id === "resting" ? () => finishRestCutscene(true) : undefined}><source src={incomingVisual.video} type="video/mp4" /></video>}
         <div className="stage-glow" />
         {atelierHud}
         <button type="button" className={`sound-toggle${soundEnabled ? " sound-on" : ""}`} aria-label={soundEnabled ? "Выключить звук" : "Включить звук"} aria-pressed={soundEnabled} onClick={toggleSound}><span aria-hidden="true">{soundEnabled ? "♫" : "♪"}</span></button>

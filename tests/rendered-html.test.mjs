@@ -140,10 +140,20 @@ test("crossfades Anna states without revealing the brown loading surface", async
   assert.match(game, /onCanPlayThrough=\{revealIncomingVideo\}/);
   assert.match(game, /incomingVisual\.id === "eating" && nextVideo\.readyState < HTMLMediaElement\.HAVE_ENOUGH_DATA/);
   assert.match(game, /displayedVideoRef\.current\?\.pause\(\)/);
-  assert.match(game, /void nextVideo\.play\(\)\.catch/);
+  assert.match(game, /void nextVideo\.play\(\)\.then/);
+  assert.match(game, /nextVideo\.requestVideoFrameCallback\(revealFirstFrame\)/);
   assert.doesNotMatch(game, /<video ref=\{incomingVideoRef\}[^>]*\sautoPlay/);
   assert.match(game, /assets\/anna-atelier-scene\.png/);
   assert.match(css, /\.scene-video-incoming\.scene-video-ready\s*\{[^}]*opacity: 1/);
+});
+
+test("plays the snack animation once without remounting or looping it", async () => {
+  const game = await readFile(new URL("../app/Game.tsx", import.meta.url), "utf8");
+  assert.match(game, /if \(readyVisual\.id === "eating"\) return/);
+  assert.match(game, /displayedVisual\.id !== "eating"/);
+  assert.match(game, /incomingVisual\.id !== "eating"/);
+  assert.match(game, /incomingVisual\.id === "eating" \? finishEatingAnimation/);
+  assert.match(game, /window\.setTimeout\(finishEatingAnimation, 5200\)/);
 });
 
 test("keeps the whole tamagotchi interface compact inside Anna's game field", async () => {
@@ -293,7 +303,7 @@ test("plays the supplied rest animation through the same stage player as every A
   assert.match(game, /assets\/videos\/anna-resting\.mp4/);
   assert.match(game, /restCutsceneActiveRef\.current/);
   assert.match(game, /className="scene-image scene-video-current"/);
-  assert.match(game, /displayedVisual\.id !== "celebrates" && displayedVisual\.id !== "resting"/);
+  assert.match(game, /displayedVisual\.id !== "celebrates" && displayedVisual\.id !== "resting" && displayedVisual\.id !== "eating"/);
   assert.match(game, /displayedVisual\.id === "resting" \? \(\) => finishRestCutscene\(\)/);
   assert.doesNotMatch(game, /className="(?:stage-)?rest-cutscene"|aria-label="Отдых Анны у моря"/);
   assert.doesNotMatch(css, /\.stage-rest-cutscene/);
