@@ -593,6 +593,95 @@ h1 {
 .pwa-dialog-actions button { min-height: 48px; }
 .pwa-dialog-actions .notification-disable { background: var(--rose-dark); }
 
+.physical-atelier-backdrop { background: rgba(54, 34, 29, 0.82); }
+
+.physical-atelier-dialog {
+  overflow-x: hidden;
+  width: min(480px, 100%);
+  max-height: min(760px, 100%);
+  padding: 27px 28px 24px;
+  border: 2px solid rgba(177, 105, 97, 0.32);
+  background:
+    radial-gradient(circle at 8% 9%, rgba(183, 95, 101, 0.12) 0 38px, transparent 39px),
+    radial-gradient(circle at 92% 88%, rgba(207, 155, 82, 0.14) 0 52px, transparent 53px),
+    repeating-linear-gradient(0deg, rgba(126, 87, 67, 0.025) 0 1px, transparent 1px 5px),
+    linear-gradient(145deg, #fffaf0, #f3dfc6);
+  box-shadow: 0 28px 90px rgba(43, 27, 23, 0.46), inset 0 0 0 7px rgba(255, 250, 240, 0.56);
+}
+
+.physical-atelier-dialog::before {
+  position: absolute;
+  z-index: 0;
+  inset: 10px;
+  border: 1px dashed rgba(153, 82, 76, 0.32);
+  border-radius: 21px;
+  content: "";
+  pointer-events: none;
+}
+
+.physical-atelier-dialog::after {
+  position: absolute;
+  z-index: 0;
+  top: 21px;
+  right: 65px;
+  color: rgba(183, 95, 101, 0.32);
+  content: "✿  ·  ✿";
+  font-size: 13px;
+  letter-spacing: 0.16em;
+}
+
+.physical-atelier-dialog > * { position: relative; z-index: 1; }
+.physical-atelier-dialog > .pwa-dialog-close { position: absolute; z-index: 3; }
+.physical-atelier-dialog > .eyebrow { color: var(--rose-dark); }
+.physical-atelier-dialog h2 { max-width: 380px; margin-bottom: 10px; font-size: 27px; }
+.physical-atelier-dialog h2 span { white-space: nowrap; }
+
+.physical-atelier-ribbon {
+  display: grid;
+  width: 52px;
+  height: 42px;
+  margin-bottom: 11px;
+  place-items: center;
+  border: 1px solid rgba(143, 68, 76, 0.22);
+  border-radius: 8px 18px 18px 8px;
+  color: #fff9ed;
+  background: linear-gradient(135deg, #c87175, #994b54);
+  box-shadow: 7px 6px 0 rgba(207, 155, 82, 0.18);
+  font-size: 21px;
+}
+
+.physical-atelier-intro { margin-bottom: 12px; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.physical-atelier-intro p + p { margin-top: 3px; color: var(--ink); font-weight: 700; }
+
+.physical-contact-card {
+  padding: 13px;
+  border: 1px dashed rgba(143, 68, 76, 0.38);
+  border-radius: 18px;
+  background: rgba(255, 253, 247, 0.74);
+  box-shadow: inset 0 0 18px rgba(183, 95, 101, 0.06);
+}
+
+.physical-contact-heading { display: flex; align-items: center; gap: 10px; padding-bottom: 10px; border-bottom: 1px solid rgba(143, 68, 76, 0.12); }
+.physical-contact-heading > span { display: grid; width: 39px; height: 39px; flex: 0 0 auto; place-items: center; border-radius: 50%; color: #fff8ed; background: var(--rose); font: italic 700 21px/1 Georgia, serif; }
+.physical-contact-heading h3 { color: #4e3835; font: 700 18px/1.1 Georgia, serif; }
+.physical-contact-heading p { margin-top: 3px; color: var(--muted); font-size: 8px; line-height: 1.35; }
+
+.physical-contact-list { display: grid; margin-top: 7px; gap: 4px; }
+.physical-contact-list > a { display: grid; min-width: 0; min-height: 39px; padding: 5px 6px; align-items: center; grid-template-columns: 27px minmax(0, 1fr); gap: 7px; border-radius: 10px; color: var(--ink); text-decoration: none; transition: background 150ms ease, transform 150ms ease; }
+.physical-contact-list > a:hover { background: rgba(183, 95, 101, 0.08); transform: translateX(2px); }
+.physical-contact-list > a > span { font-size: 14px; text-align: center; }
+.physical-contact-list small,
+.physical-contact-list strong { display: block; }
+.physical-contact-list small { color: var(--muted); font-size: 7px; letter-spacing: 0.06em; text-transform: uppercase; }
+.physical-contact-list strong { margin-top: 2px; overflow-wrap: anywhere; font-size: 9px; line-height: 1.25; }
+
+.physical-order-button { display: flex; min-height: 54px; margin-top: 12px; align-items: center; justify-content: center; border-radius: 16px; text-decoration: none; box-shadow: 0 11px 24px rgba(143, 68, 76, 0.32), inset 0 1px rgba(255, 255, 255, 0.18); font-size: 12px; }
+.physical-contact-actions { display: grid; margin-top: 8px; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.physical-contact-actions a { display: flex; min-height: 40px; align-items: center; justify-content: center; border: 1px solid rgba(143, 68, 76, 0.2); border-radius: 12px; color: var(--rose-dark); background: rgba(255, 250, 242, 0.74); font-size: 8px; font-weight: 800; text-decoration: none; }
+
+.care-actions .physical-atelier-action { border-color: rgba(183, 95, 101, 0.42); color: #85444d; background: linear-gradient(145deg, #fff4e8, #f4d8d2); box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.46); }
+.care-actions .physical-atelier-action span { color: var(--rose-dark); }
+
 .stage-glow {
   position: absolute;
   z-index: 2;
@@ -1899,6 +1988,11 @@ h1 {
 
   .pwa-dialog { padding: 26px 20px 20px; border-radius: 22px; }
   .pwa-dialog h2 { max-width: calc(100% - 38px); font-size: 25px; }
+  .physical-atelier-dialog { padding: 23px 18px 18px; }
+  .physical-atelier-dialog h2 { max-width: calc(100% - 12px); font-size: 23px; }
+  .physical-atelier-dialog::after { right: 57px; }
+  .physical-contact-card { padding: 10px; }
+  .physical-order-button { min-height: 52px; }
 
   .character-stage .scene-image {
     width: 100%;
@@ -1978,6 +2072,12 @@ h1 {
   .care-actions button small {
     margin: 0;
   }
+
+  .physical-atelier-dialog { max-height: 100%; }
+  .physical-atelier-dialog h2 { font-size: 21px; }
+  .physical-atelier-intro { font-size: 9px; }
+  .physical-contact-heading h3 { font-size: 16px; }
+  .physical-contact-actions a { min-height: 42px; }
 
   .match-board {
     padding: 6px;

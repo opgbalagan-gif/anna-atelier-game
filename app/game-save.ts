@@ -1,6 +1,7 @@
 export const RELEASE_VERSION = "1.0.0";
 export const GAME_SAVE_KEY = "atelier_anna_save_v1";
 export const GAME_SAVE_SCHEMA_VERSION = 1;
+export const PHYSICAL_ATELIER_UNLOCK_LEVEL = 5;
 const MAX_SAVED_MOVES = 40;
 const ORDER_COUNT = 10;
 
@@ -19,6 +20,8 @@ export type GameSaveState = {
   drawingSketchIndex: number;
   completedSketches: number[];
   soundEnabled: boolean;
+  physicalAtelierUnlocked: boolean;
+  physicalAtelierIntroSeen: boolean;
 };
 
 type SaveEnvelope = {
@@ -68,6 +71,7 @@ export function parseGameSave(serialized: string | null): GameSaveState | null {
       ? [...new Set(state.completedSketches.filter((index): index is number => Number.isInteger(index) && index >= 0 && index <= 2))]
       : [];
     const activeOrder = state.activeOrder === true && orderIndex! < ORDER_COUNT;
+    const physicalAtelierUnlocked = state.physicalAtelierUnlocked === true || orderIndex! >= PHYSICAL_ATELIER_UNLOCK_LEVEL;
 
     return {
       board: [...board],
@@ -84,6 +88,8 @@ export function parseGameSave(serialized: string | null): GameSaveState | null {
       drawingSketchIndex: drawingSketchIndex!,
       completedSketches,
       soundEnabled: state.soundEnabled === true,
+      physicalAtelierUnlocked,
+      physicalAtelierIntroSeen: physicalAtelierUnlocked && state.physicalAtelierIntroSeen === true,
     };
   } catch {
     return null;

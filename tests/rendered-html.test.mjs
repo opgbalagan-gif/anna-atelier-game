@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { GAME_SAVE_KEY, parseGameSave, RELEASE_VERSION } from "../app/game-save.ts";
+import { GAME_SAVE_KEY, parseGameSave, PHYSICAL_ATELIER_UNLOCK_LEVEL, RELEASE_VERSION } from "../app/game-save.ts";
 import { disablePushNotifications, enablePushNotifications } from "../app/pwa-client.ts";
 
 async function render() {
@@ -46,6 +46,8 @@ test("uses the versioned, validated browser save schema", async () => {
   assert.ok(valid);
   assert.equal(valid.coins, 91);
   assert.deepEqual(valid.completedSketches, [0, 2]);
+  assert.equal(valid.physicalAtelierUnlocked, false);
+  assert.equal(valid.physicalAtelierIntroSeen, false);
 
   const lateGame = parseGameSave(JSON.stringify({
     schemaVersion: 1,
@@ -59,6 +61,31 @@ test("uses the versioned, validated browser save schema", async () => {
   assert.equal(lateGame.moves, 40);
   assert.equal(lateGame.orderIndex, 9);
   assert.equal(lateGame.activeOrder, true);
+  assert.equal(lateGame.physicalAtelierUnlocked, true, "older saves past level five migrate to the physical atelier unlock");
+  assert.equal(lateGame.physicalAtelierIntroSeen, false, "migrated players see the introduction once");
+});
+
+test("unlocks the real Atelier Anna contacts after level five", async () => {
+  const game = await readFile(new URL("../app/Game.tsx", import.meta.url), "utf8");
+  const save = await readFile(new URL("../app/game-save.ts", import.meta.url), "utf8");
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  assert.equal(PHYSICAL_ATELIER_UNLOCK_LEVEL, 5);
+  assert.match(game, /orderIndex \+ 1 >= PHYSICAL_ATELIER_UNLOCK_LEVEL/);
+  assert.match(game, /setPhysicalAtelierUnlocked\(true\)/);
+  assert.match(game, /setPhysicalAtelierIntroSeen\(true\)/);
+  assert.match(game, /className="physical-atelier-action"/);
+  assert.match(game, /Теперь можно заказать по-настоящему/);
+  assert.match(game, /Индивидуальный пошив • ремонт • подгонка одежды/);
+  assert.match(game, /const PHYSICAL_ATELIER_PHONE_LINK = "tel:\+79147134727"/);
+  assert.match(game, /const PHYSICAL_ATELIER_TELEGRAM_LINK = "https:\/\/t\.me\/anna_mitckevich_studioatelier"/);
+  assert.match(game, /const PHYSICAL_ATELIER_INSTAGRAM_LINK = "https:\/\/www\.instagram\.com\/annamitckevich"/);
+  assert.match(game, /className="primary-button physical-order-button" href=\{PHYSICAL_ATELIER_INSTAGRAM_LINK\} target="_blank"/);
+  assert.match(game, /https:\/\/maps\.apple\.com\/\?q=/);
+  assert.match(game, /https:\/\/www\.google\.com\/maps\/search\/\?api=1&query=/);
+  assert.match(save, /physicalAtelierUnlocked: boolean/);
+  assert.match(save, /physicalAtelierIntroSeen: boolean/);
+  assert.match(css, /\.physical-atelier-dialog::before\s*\{[^}]*border: 1px dashed/);
+  assert.match(css, /\.physical-order-button\s*\{[^}]*min-height: 54px/);
 });
 
 test("ships ten progressively harder atelier orders", async () => {
@@ -320,6 +347,8 @@ test("resets every persisted game field for a new game", async () => {
   assert.match(game, /setCoins\(36\)/);
   assert.match(game, /setOrderIndex\(0\)/);
   assert.match(game, /setCompletedSketches\(\[\]\)/);
+  assert.match(game, /setPhysicalAtelierUnlocked\(false\)/);
+  assert.match(game, /setPhysicalAtelierIntroSeen\(false\)/);
   assert.match(game, /Начать новую игру\? Текущий прогресс будет удалён/);
 });
 

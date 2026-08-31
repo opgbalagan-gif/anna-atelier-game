@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
-import { clearGameSave, readGameSave, RELEASE_VERSION, writeGameSave } from "./game-save";
+import { clearGameSave, PHYSICAL_ATELIER_UNLOCK_LEVEL, readGameSave, RELEASE_VERSION, writeGameSave } from "./game-save";
 import type { GameSaveState } from "./game-save";
 import {
   disablePushNotifications,
@@ -27,6 +27,13 @@ const TARGET_TILE_CHANCE = 0.3;
 const LATE_TARGET_TILE_CHANCE = 0.36;
 const RETRY_TARGET_TILE_CHANCE = 0.44;
 const DRAWING_UNLOCK_AT = 50;
+const PHYSICAL_ATELIER_PHONE = "+7 914 713-47-27";
+const PHYSICAL_ATELIER_PHONE_LINK = "tel:+79147134727";
+const PHYSICAL_ATELIER_TELEGRAM = "@anna_mitckevich_studioatelier";
+const PHYSICAL_ATELIER_TELEGRAM_LINK = "https://t.me/anna_mitckevich_studioatelier";
+const PHYSICAL_ATELIER_ADDRESS = "г. Находка, ул. Пирогова, 54А";
+const PHYSICAL_ATELIER_INSTAGRAM = "@annamitckevich";
+const PHYSICAL_ATELIER_INSTAGRAM_LINK = "https://www.instagram.com/annamitckevich";
 
 const TILE_TYPES = [
   { name: "катушка ниток", short: "Нитки" },
@@ -251,6 +258,9 @@ export default function Game({ onReady }: { onReady?: () => void } = {}) {
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [showOrderReadyMessage, setShowOrderReadyMessage] = useState(false);
   const [celebrating, setCelebrating] = useState(false);
+  const [physicalAtelierUnlocked, setPhysicalAtelierUnlocked] = useState(false);
+  const [physicalAtelierIntroSeen, setPhysicalAtelierIntroSeen] = useState(false);
+  const [physicalAtelierOpen, setPhysicalAtelierOpen] = useState(false);
   const [hunger, setHunger] = useState(76);
   const [energy, setEnergy] = useState(83);
   const [boredom, setBoredom] = useState(28);
@@ -298,6 +308,9 @@ export default function Game({ onReady }: { onReady?: () => void } = {}) {
   const level = Math.floor(score / 1600) + 1;
   const averageCare = Math.round((hunger + energy + (100 - boredom)) / 3);
   const movesFinished = screen === "match3" && activeOrder && !orderReady && !busy && moves <= 0;
+  const physicalAtelierMapLink = iosDevice
+    ? `https://maps.apple.com/?q=${encodeURIComponent(PHYSICAL_ATELIER_ADDRESS)}`
+    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(PHYSICAL_ATELIER_ADDRESS)}`;
 
   const currentSave = useMemo<GameSaveState>(() => ({
     board,
@@ -314,7 +327,9 @@ export default function Game({ onReady }: { onReady?: () => void } = {}) {
     drawingSketchIndex,
     completedSketches,
     soundEnabled,
-  }), [activeOrder, board, boredom, coins, completedSketches, drawingSketchIndex, energy, hunger, moves, orderIndex, orderProgress, orderReady, score, soundEnabled]);
+    physicalAtelierUnlocked,
+    physicalAtelierIntroSeen,
+  }), [activeOrder, board, boredom, coins, completedSketches, drawingSketchIndex, energy, hunger, moves, orderIndex, orderProgress, orderReady, physicalAtelierIntroSeen, physicalAtelierUnlocked, score, soundEnabled]);
 
   useEffect(() => {
     saveSnapshotRef.current = currentSave;
@@ -346,6 +361,8 @@ export default function Game({ onReady }: { onReady?: () => void } = {}) {
         setDrawingSketchIndex(saved.drawingSketchIndex);
         setCompletedSketches(saved.completedSketches);
         setSoundEnabled(saved.soundEnabled);
+        setPhysicalAtelierUnlocked(saved.physicalAtelierUnlocked);
+        setPhysicalAtelierIntroSeen(saved.physicalAtelierIntroSeen);
         soundEnabledRef.current = saved.soundEnabled;
         setToast("Сохранённый прогресс восстановлен");
       }
@@ -353,6 +370,15 @@ export default function Game({ onReady }: { onReady?: () => void } = {}) {
     });
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    if (!saveReady || !physicalAtelierUnlocked || physicalAtelierIntroSeen) return;
+    const frame = window.requestAnimationFrame(() => {
+      setPhysicalAtelierIntroSeen(true);
+      setPhysicalAtelierOpen(true);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [physicalAtelierIntroSeen, physicalAtelierUnlocked, saveReady]);
 
   useEffect(() => {
     if (!saveReady || resetInProgressRef.current) return;
@@ -500,12 +526,18 @@ export default function Game({ onReady }: { onReady?: () => void } = {}) {
     setCelebrating(false);
     if (!activeOrder || !orderReady) return;
     const finishedTitle = order.title, reward = order.reward;
+    const unlockPhysicalAtelier = !physicalAtelierUnlocked && orderIndex + 1 >= PHYSICAL_ATELIER_UNLOCK_LEVEL;
     setCoins((value) => value + reward); setScore((value) => value + reward * 3);
     setActiveOrder(false); setOrderReady(false); setOrderProgress(0); setOrderIndex((value) => value + 1);
     setBoredom((value) => Math.max(0, value - 28)); setScreen("home");
     setToast(`Заказ «${finishedTitle}» готов! +${reward} монет`);
+    if (unlockPhysicalAtelier) {
+      setPhysicalAtelierUnlocked(true);
+      setPhysicalAtelierIntroSeen(true);
+      setPhysicalAtelierOpen(true);
+    }
     playSound("coin");
-  }, [activeOrder, celebrating, order.reward, order.title, orderReady, playSound]);
+  }, [activeOrder, celebrating, order.reward, order.title, orderIndex, orderReady, physicalAtelierUnlocked, playSound, setPhysicalAtelierIntroSeen, setPhysicalAtelierOpen, setPhysicalAtelierUnlocked]);
 
   const annaState = useMemo(() => {
     if (temporaryState === "eating") return "Анна устроила уютный перекус";
@@ -910,6 +942,9 @@ export default function Game({ onReady }: { onReady?: () => void } = {}) {
     setShowOrderModal(false);
     setShowOrderReadyMessage(false);
     setCelebrating(false);
+    setPhysicalAtelierUnlocked(false);
+    setPhysicalAtelierIntroSeen(false);
+    setPhysicalAtelierOpen(false);
     setHunger(76);
     setEnergy(83);
     setBoredom(28);
@@ -1197,7 +1232,7 @@ export default function Game({ onReady }: { onReady?: () => void } = {}) {
         <div className="section-heading compact-heading"><div><p className="eyebrow">хозяйка ателье</p><h2>Анна</h2></div>{completedSketches.length > 0 && <div className="atelier-gallery" aria-label="Готовые картины Анны">{completedSketches.map((index) => <span key={index} title={DRAWING_SKETCHES[index].name} style={{ backgroundImage: `url("${assetPath(DRAWING_SKETCHES[index].asset)}")` }} />)}</div>}<span className="care-score">{averageCare}%</span></div>
         <p className="anna-state">{annaState}</p>
         <div className="meters"><Meter label="Сытость" value={hunger} tone="coral" /><Meter label="Энергия" value={energy} tone="gold" /><Meter label="Скука" value={boredom} tone="boredom" /></div>
-        <div className={`care-actions${drawingUnlocked ? " has-drawing" : ""}`}><button type="button" disabled={celebrating || restCutsceneOpen} onClick={() => careForAnna("food")}><span>☕</span><strong>Перекус</strong><small>8 ●</small></button><button type="button" disabled={celebrating || restCutsceneOpen} onClick={() => careForAnna("rest")}><span>☁</span><strong>Отдых</strong><small>6 ●</small></button>{activeOrder && <button type="button" onClick={() => careForAnna("sew")} disabled={celebrating || orderReady || restCutsceneOpen}><span>✂</span><strong>{orderReady ? "Готово" : "Шить"}</strong><small>{orderProgress}/{order.goal}</small></button>}{drawingUnlocked && <button type="button" className="drawing-action" disabled={celebrating || restCutsceneOpen} onClick={() => { playSound("tap"); setScreen("drawing"); }}><span>✎</span><strong>Рисовать</strong><small>− скука</small></button>}</div>
+        <div className={`care-actions${drawingUnlocked ? " has-drawing" : ""}${physicalAtelierUnlocked ? " has-physical-atelier" : ""}`}><button type="button" disabled={celebrating || restCutsceneOpen} onClick={() => careForAnna("food")}><span>☕</span><strong>Перекус</strong><small>8 ●</small></button><button type="button" disabled={celebrating || restCutsceneOpen} onClick={() => careForAnna("rest")}><span>☁</span><strong>Отдых</strong><small>6 ●</small></button>{activeOrder && <button type="button" onClick={() => careForAnna("sew")} disabled={celebrating || orderReady || restCutsceneOpen}><span>✂</span><strong>{orderReady ? "Готово" : "Шить"}</strong><small>{orderProgress}/{order.goal}</small></button>}{drawingUnlocked && <button type="button" className="drawing-action" disabled={celebrating || restCutsceneOpen} onClick={() => { playSound("tap"); setScreen("drawing"); }}><span>✎</span><strong>Рисовать</strong><small>− скука</small></button>}{physicalAtelierUnlocked && <button type="button" className="physical-atelier-action" aria-haspopup="dialog" onClick={() => { playSound("tap"); setPhysicalAtelierOpen(true); }}><span>✂</span><strong>Ателье</strong><small>заказать</small></button>}</div>
       </div>
     </aside>
   );
@@ -1243,12 +1278,43 @@ export default function Game({ onReady }: { onReady?: () => void } = {}) {
     </section>
   );
 
+  const physicalAtelierDialog = physicalAtelierOpen ? (
+    <section className="pwa-dialog-backdrop physical-atelier-backdrop" role="dialog" aria-modal="true" aria-labelledby="physical-atelier-title">
+      <div className="pwa-dialog physical-atelier-dialog">
+        <button type="button" className="pwa-dialog-close" aria-label="Закрыть контакты ателье" onClick={() => setPhysicalAtelierOpen(false)}>×</button>
+        <div className="physical-atelier-ribbon" aria-hidden="true"><span>✂</span></div>
+        <p className="eyebrow">награда {PHYSICAL_ATELIER_UNLOCK_LEVEL} уровня</p>
+        <h2 id="physical-atelier-title">Теперь можно заказать по-настоящему <span aria-hidden="true">✂️</span></h2>
+        <div className="physical-atelier-intro">
+          <p>Понравилось создавать вещи вместе с Анной?</p>
+          <p>Теперь ты можешь сделать заказ в настоящем ателье.</p>
+        </div>
+        <div className="physical-contact-card">
+          <div className="physical-contact-heading"><span aria-hidden="true">А</span><div><h3>Ателье Анны</h3><p>Индивидуальный пошив • ремонт • подгонка одежды</p></div></div>
+          <div className="physical-contact-list">
+            <a href={PHYSICAL_ATELIER_PHONE_LINK}><span aria-hidden="true">📞</span><div><small>Телефон</small><strong>{PHYSICAL_ATELIER_PHONE}</strong></div></a>
+            <a href={PHYSICAL_ATELIER_TELEGRAM_LINK} target="_blank" rel="noopener noreferrer"><span aria-hidden="true">💬</span><div><small>Telegram</small><strong>{PHYSICAL_ATELIER_TELEGRAM}</strong></div></a>
+            <a href={physicalAtelierMapLink} target="_blank" rel="noopener noreferrer"><span aria-hidden="true">📍</span><div><small>Адрес</small><strong>{PHYSICAL_ATELIER_ADDRESS}</strong></div></a>
+            <a href={PHYSICAL_ATELIER_INSTAGRAM_LINK} target="_blank" rel="noopener noreferrer"><span aria-hidden="true">📷</span><div><small>Instagram</small><strong>{PHYSICAL_ATELIER_INSTAGRAM}</strong></div></a>
+          </div>
+        </div>
+        <a className="primary-button physical-order-button" href={PHYSICAL_ATELIER_INSTAGRAM_LINK} target="_blank" rel="noopener noreferrer">Сделать заказ</a>
+        <div className="physical-contact-actions" aria-label="Другие способы связи">
+          <a href={PHYSICAL_ATELIER_PHONE_LINK}>Позвонить</a>
+          <a href={PHYSICAL_ATELIER_TELEGRAM_LINK} target="_blank" rel="noopener noreferrer">Telegram</a>
+          <a href={physicalAtelierMapLink} target="_blank" rel="noopener noreferrer">Адрес</a>
+        </div>
+      </div>
+    </section>
+  ) : null;
+
   return (
     <main className={`game-shell game-shell-${screen}`}>
       {header}
       <section className={`studio-window studio-window-${screen}`} aria-label="Главное окно игры">{screen === "home" && homeScreen}{screen === "match3" && matchScreen}{screen === "drawing" && drawingScreen}</section>
       {installHelpOpen && <section className="pwa-dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="install-help-title"><div className="pwa-dialog"><button type="button" className="pwa-dialog-close" aria-label="Закрыть подсказку" onClick={() => setInstallHelpOpen(false)}>×</button><div className="pwa-dialog-mark" aria-hidden="true">А</div><p className="eyebrow">приложение для телефона</p><h2 id="install-help-title">Добавь Ателье Анны на экран телефона</h2><ol><li><span>1</span><div><strong>Открой игру в Safari</strong><small>Установка на iPhone выполняется из Safari.</small></div></li><li><span>2</span><div><strong>Нажми «Поделиться»</strong><small>Кнопка с квадратом и стрелкой вверх.</small></div></li><li><span>3</span><div><strong>Выбери «На экран Домой»</strong><small>После этого игра откроется как отдельное приложение.</small></div></li></ol><button type="button" className="primary-button" onClick={() => setInstallHelpOpen(false)}>Понятно</button></div></section>}
       {pushDialogOpen && <section className="pwa-dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="push-dialog-title"><div className="pwa-dialog"><button type="button" className="pwa-dialog-close" aria-label="Закрыть настройки уведомлений" onClick={dismissPushDialog}>×</button><div className="pwa-dialog-mark notification-mark" aria-hidden="true">♢</div><p className="eyebrow">тихие напоминания</p><h2 id="push-dialog-title">Анна может позвать тебя в ателье</h2><p className="pwa-dialog-copy">Только полезные сообщения о настоящих событиях игры. Ателье полностью работает и без уведомлений.</p>{pushRequiresInstallation ? <p className="pwa-dialog-message">На iPhone уведомления доступны после добавления игры на экран Домой.</p> : pushMessage && <p className="pwa-dialog-message" role="status">{pushMessage}</p>}<div className="pwa-dialog-actions"><button type="button" className="secondary-button" onClick={dismissPushDialog}>Не сейчас</button>{pushRequiresInstallation ? <button type="button" className="primary-button" onClick={() => { setPushDialogOpen(false); setInstallHelpOpen(true); }}>Как установить</button> : pushEnabled ? <button type="button" className="primary-button notification-disable" disabled={pwaActionBusy} onClick={() => void disableNotifications()}>Выключить</button> : <button type="button" className="primary-button" disabled={pwaActionBusy} onClick={() => void enableNotifications()}>Разрешить уведомления</button>}</div></div></section>}
+      {physicalAtelierDialog}
     </main>
   );
 }
