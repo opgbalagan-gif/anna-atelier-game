@@ -109,6 +109,11 @@ test("shows incoming orders in Anna's upper-right bubble", async () => {
   assert.match(game, /aria-expanded=\{showOrderModal\}/);
   assert.match(game, /className="order-modal order-inbox-card"/);
   assert.match(game, /aria-modal="false"/);
+  assert.match(game, /className="modal-material-preview"/);
+  assert.match(game, /Нужно собрать: \$\{TILE_TYPES\[order\.tile\]\.short\}, \$\{order\.goal\} штук/);
+  assert.match(game, /<TileSprite type=\{order\.tile\} small \/>/);
+  assert.match(game, /<strong>\{TILE_TYPES\[order\.tile\]\.short\}<\/strong>/);
+  assert.match(css, /\.modal-material-preview\s*\{[^}]*grid-template-columns: 42px minmax\(0, 1fr\) auto/);
   assert.match(css, /\.mood-bubble\s*\{[^}]*top: 22px;[^}]*right: 22px;/);
   assert.match(css, /\.order-alert-bubble\s*\{[^}]*cursor: pointer/);
   assert.match(css, /\.order-inbox-card\s*\{[^}]*position: absolute;[^}]*top: 76px;[^}]*right: 18px;/);
