@@ -14,6 +14,7 @@ const CRITICAL_ASSETS: CriticalAsset[] = [
   { path: "assets/loading/atelier-anna-splash.png", bytes: 2_491_135, kind: "image" },
   { path: "assets/anna-atelier-scene.png", bytes: 2_325_650, kind: "image" },
   { path: "assets/videos/anna-sewing.mp4", bytes: 4_525_387, kind: "video" },
+  { path: "assets/videos/anna-eating.mp4", bytes: 4_199_088, kind: "video" },
   { path: "assets/audio/anna-atelier-theme.mp3", bytes: 2_481_549, kind: "audio" },
 ];
 

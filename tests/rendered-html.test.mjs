@@ -132,6 +132,11 @@ test("crossfades Anna states without revealing the brown loading surface", async
   assert.match(game, /scene-video-current/);
   assert.match(game, /scene-video-incoming/);
   assert.match(game, /onCanPlay=\{revealIncomingVideo\}/);
+  assert.match(game, /onCanPlayThrough=\{revealIncomingVideo\}/);
+  assert.match(game, /incomingVisual\.id === "eating" && nextVideo\.readyState < HTMLMediaElement\.HAVE_ENOUGH_DATA/);
+  assert.match(game, /displayedVideoRef\.current\?\.pause\(\)/);
+  assert.match(game, /void nextVideo\.play\(\)\.catch/);
+  assert.doesNotMatch(game, /<video ref=\{incomingVideoRef\}[^>]*\sautoPlay/);
   assert.match(game, /assets\/anna-atelier-scene\.png/);
   assert.match(css, /\.scene-video-incoming\.scene-video-ready\s*\{[^}]*opacity: 1/);
 });
@@ -316,7 +321,9 @@ test("ties splash progress to critical asset bytes and game readiness", async ()
   const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
   const entry = await readFile(new URL("../github-pages/main.tsx", import.meta.url), "utf8");
   assert.match(loader, /CRITICAL_ASSETS/);
-  assert.equal((loader.match(/\.mp4"/g) ?? []).length, 1, "only the initial Anna video is critical");
+  assert.equal((loader.match(/\.mp4"/g) ?? []).length, 2, "only the initial and snack videos are critical");
+  assert.match(loader, /assets\/videos\/anna-sewing\.mp4/);
+  assert.match(loader, /assets\/videos\/anna-eating\.mp4/);
   assert.match(loader, /response\.body\?\.getReader\(\)/);
   assert.match(loader, /loaded \+= chunk\.value\.byteLength/);
   assert.match(loader, /document\.fonts\.ready/);

@@ -517,6 +517,8 @@ export default function Game({ onReady }: { onReady?: () => void } = {}) {
   const [displayedVisual, setDisplayedVisual] = useState<AnnaVisual>(annaVisual);
   const [incomingVisual, setIncomingVisual] = useState<AnnaVisual | null>(null);
   const [incomingReady, setIncomingReady] = useState(false);
+  const displayedVideoRef = useRef<HTMLVideoElement | null>(null);
+  const incomingVideoRef = useRef<HTMLVideoElement | null>(null);
   const videoTransitionTimer = useRef<number | null>(null);
 
   useEffect(() => {
@@ -535,7 +537,13 @@ export default function Game({ onReady }: { onReady?: () => void } = {}) {
 
   function revealIncomingVideo() {
     if (!incomingVisual || incomingReady) return;
+    const nextVideo = incomingVideoRef.current;
+    if (!nextVideo) return;
+    if (incomingVisual.id === "eating" && nextVideo.readyState < HTMLMediaElement.HAVE_ENOUGH_DATA) return;
     const readyVisual = incomingVisual;
+    nextVideo.currentTime = 0;
+    displayedVideoRef.current?.pause();
+    void nextVideo.play().catch(() => undefined);
     setIncomingReady(true);
     videoTransitionTimer.current = window.setTimeout(() => {
       setDisplayedVisual(readyVisual);
@@ -1120,8 +1128,8 @@ export default function Game({ onReady }: { onReady?: () => void } = {}) {
   const annaCard = (
     <aside className="anna-card panel">
       <div className="character-stage" style={{ backgroundImage: `url("${assetPath("assets/anna-atelier-scene.png")}")` }}>
-        <video key={displayedVisual.video} className="scene-image scene-video-current" autoPlay loop={displayedVisual.id !== "celebrates" && displayedVisual.id !== "resting"} muted playsInline preload="auto" aria-label={displayedVisual.alt} onEnded={displayedVisual.id === "celebrates" ? finishCelebration : displayedVisual.id === "resting" ? () => finishRestCutscene() : undefined} onError={displayedVisual.id === "resting" ? () => finishRestCutscene(true) : undefined}><source src={displayedVisual.video} type="video/mp4" /></video>
-        {incomingVisual && <video key={incomingVisual.video} className={`scene-image scene-video-incoming${incomingReady ? " scene-video-ready" : ""}`} autoPlay loop={incomingVisual.id !== "celebrates" && incomingVisual.id !== "resting"} muted playsInline preload="auto" aria-label={incomingVisual.alt} onCanPlay={revealIncomingVideo} onEnded={incomingVisual.id === "celebrates" ? finishCelebration : incomingVisual.id === "resting" ? () => finishRestCutscene() : undefined} onError={incomingVisual.id === "resting" ? () => finishRestCutscene(true) : undefined}><source src={incomingVisual.video} type="video/mp4" /></video>}
+        <video ref={displayedVideoRef} key={displayedVisual.video} className="scene-image scene-video-current" autoPlay loop={displayedVisual.id !== "celebrates" && displayedVisual.id !== "resting"} muted playsInline preload="auto" aria-label={displayedVisual.alt} onEnded={displayedVisual.id === "celebrates" ? finishCelebration : displayedVisual.id === "resting" ? () => finishRestCutscene() : undefined} onError={displayedVisual.id === "resting" ? () => finishRestCutscene(true) : undefined}><source src={displayedVisual.video} type="video/mp4" /></video>
+        {incomingVisual && <video ref={incomingVideoRef} key={incomingVisual.video} className={`scene-image scene-video-incoming${incomingReady ? " scene-video-ready" : ""}`} loop={incomingVisual.id !== "celebrates" && incomingVisual.id !== "resting"} muted playsInline preload="auto" aria-label={incomingVisual.alt} onCanPlay={revealIncomingVideo} onCanPlayThrough={revealIncomingVideo} onEnded={incomingVisual.id === "celebrates" ? finishCelebration : incomingVisual.id === "resting" ? () => finishRestCutscene() : undefined} onError={incomingVisual.id === "resting" ? () => finishRestCutscene(true) : undefined}><source src={incomingVisual.video} type="video/mp4" /></video>}
         <div className="stage-glow" />
         {atelierHud}
         <button type="button" className={`sound-toggle${soundEnabled ? " sound-on" : ""}`} aria-label={soundEnabled ? "Выключить звук" : "Включить звук"} aria-pressed={soundEnabled} onClick={toggleSound}><span aria-hidden="true">{soundEnabled ? "♫" : "♪"}</span></button>
